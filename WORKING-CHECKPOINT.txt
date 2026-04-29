@@ -1,0 +1,16 @@
+WORKING CHECKPOINT
+Date: 2026-04-22
+
+Status:
+- right-to-the-source.vercel.app is live
+- homepage loads
+- map renders
+- featured cards render
+- deploy fixed using production prebuilt flow
+
+Known next tasks:
+1. connect custom domain
+2. remove placeholder/demo content
+3. fix image saving/display
+4. restyle payment setup
+5. reorganize seller dashboard

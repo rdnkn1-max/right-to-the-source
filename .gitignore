@@ -1,0 +1,25 @@
+node_modules
+.env
+.DS_Store
+# local/deploy files
+.vercel/
+frontend/.vercel/
+build/
+frontend/build/
+
+# env files
+.env
+.env.*
+frontend/.env*
+server/.env*
+
+server/.env
+
+.vercel/
+frontend/.vercel/
+.env
+.env.*
+frontend/.env*
+server/.env*
+build/
+frontend/build/
