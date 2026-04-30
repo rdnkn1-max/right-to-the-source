@@ -1,13 +1,366 @@
-body {
+:root {
+  --app-bg: #f6f1e8;
+  --app-surface: #fffdf8;
+  --app-ink: #173d33;
+  --app-transition-fast: 180ms;
+  --app-transition-base: 260ms;
+  --app-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --app-height: 100vh;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  padding: 0;
+  background: var(--app-bg);
+  overscroll-behavior: none;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  background: var(--app-bg);
+}
+
+body {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  color: var(--app-ink);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI",
+    "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans",
+    "Helvetica Neue", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  -webkit-touch-callout: none;
+}
+
+#root {
+  isolation: isolate;
+}
+
+.app-route-shell {
+  min-height: 100%;
+  animation: app-route-enter var(--app-transition-base) var(--app-ease);
+}
+
+.app-transition-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.app-transition-overlay__backdrop {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, rgba(23, 61, 51, 0.12) 0%, rgba(23, 61, 51, 0.02) 42%, rgba(23, 61, 51, 0) 72%);
+  animation: app-overlay-fade 240ms var(--app-ease) both;
+}
+
+.app-transition-overlay__pulse {
+  position: absolute;
+  width: 132px;
+  height: 132px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(246, 211, 101, 0.34) 0%, rgba(246, 211, 101, 0.12) 48%, rgba(246, 211, 101, 0) 76%);
+  animation: app-overlay-pulse 280ms var(--app-ease) both;
+}
+
+.app-transition-overlay__card {
+  position: relative;
+  z-index: 1;
+  padding: 12px 16px;
+  border-radius: 999px;
+  background: rgba(255, 253, 248, 0.94);
+  border: 1px solid rgba(23, 61, 51, 0.08);
+  color: #173d33;
+  font-size: 13px;
+  font-weight: 800;
+  box-shadow: 0 18px 36px rgba(23, 61, 51, 0.14);
+  animation: app-overlay-card 280ms var(--app-ease) both;
+}
+
+.app-shell {
+  width: 100%;
+  height: var(--app-height, 100vh);
+  min-height: var(--app-height, 100vh);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: none;
+  -webkit-overflow-scrolling: touch;
+  padding-top: var(--safe-top);
+  padding-right: var(--safe-right);
+  padding-bottom: var(--safe-bottom);
+  padding-left: var(--safe-left);
+  background: var(--app-bg);
+}
+
+.native-app .app-shell {
+  scrollbar-width: none;
+}
+
+.native-app .app-shell::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+@keyframes app-route-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes app-card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes app-overlay-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes app-overlay-pulse {
+  from {
+    opacity: 0;
+    transform: scale(0.72);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes app-overlay-card {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes app-active-glow {
+  0%,
+  100% {
+    box-shadow: 0 10px 22px rgba(23, 61, 51, 0.1);
+  }
+
+  50% {
+    box-shadow: 0 14px 26px rgba(23, 61, 51, 0.14);
+  }
+}
+
+.app-animate-card {
+  animation: app-card-enter 320ms var(--app-ease) both;
+}
+
+.app-animate-card--delay-1 {
+  animation-delay: 50ms;
+}
+
+.app-animate-card--delay-2 {
+  animation-delay: 100ms;
+}
+
+.app-animate-card--delay-3 {
+  animation-delay: 150ms;
+}
+
+button,
+a,
+input,
+textarea,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button,
+.mobile-bottom-nav__item,
+.app-pressable {
+  transition: transform var(--app-transition-fast) var(--app-ease),
+    box-shadow var(--app-transition-fast) var(--app-ease),
+    background-color var(--app-transition-fast) var(--app-ease),
+    color var(--app-transition-fast) var(--app-ease),
+    opacity var(--app-transition-fast) var(--app-ease);
+}
+
+@media (hover: hover) {
+  button:hover,
+  .mobile-bottom-nav__item:hover,
+  .app-pressable:hover {
+    transform: translateY(-1px);
+  }
+}
+
+button:active,
+.mobile-bottom-nav__item:active,
+.app-pressable:active {
+  transform: scale(0.98);
+}
+
+img {
+  -webkit-user-drag: none;
 }
 
 code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+  font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New",
     monospace;
+}
+
+.mobile-bottom-nav {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  :root {
+    --mobile-bottom-nav-height: 88px;
+  }
+
+  .app-shell {
+    padding-bottom: calc(var(--safe-bottom) + var(--mobile-bottom-nav-height) + 20px);
+  }
+
+  .mobile-bottom-nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1500;
+    display: block;
+    padding: 0 14px calc(var(--safe-bottom) + 12px);
+    pointer-events: none;
+  }
+
+  .mobile-bottom-nav__inner {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
+    align-items: center;
+    min-height: var(--mobile-bottom-nav-height);
+    max-width: 520px;
+    margin: 0 auto;
+    padding: 10px;
+    border-radius: 28px;
+    background: rgba(255, 253, 248, 0.9);
+    border: 1px solid rgba(165, 142, 120, 0.18);
+    box-shadow: 0 20px 40px rgba(37, 30, 20, 0.12),
+      0 8px 18px rgba(23, 61, 51, 0.08);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    pointer-events: auto;
+  }
+
+  .mobile-bottom-nav__item {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    min-height: 66px;
+    padding: 10px 6px;
+    border-radius: 22px;
+    color: rgba(23, 61, 51, 0.72);
+    text-decoration: none;
+    transition: transform 0.18s ease, background-color 0.18s ease,
+      color 0.18s ease, box-shadow 0.18s ease;
+    overflow: hidden;
+  }
+
+  .mobile-bottom-nav__item:active {
+    transform: scale(0.98);
+  }
+
+  .mobile-bottom-nav__item::after {
+    content: "";
+    position: absolute;
+    inset: auto 18px 8px;
+    height: 3px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(23, 61, 51, 0), rgba(23, 61, 51, 0.28), rgba(23, 61, 51, 0));
+    opacity: 0;
+    transform: scaleX(0.5);
+    transition: opacity var(--app-transition-base) var(--app-ease),
+      transform var(--app-transition-base) var(--app-ease);
+  }
+
+  .mobile-bottom-nav__item.is-active {
+    color: #173d33;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 242, 232, 0.98) 100%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 10px 22px rgba(23, 61, 51, 0.1);
+    animation: app-active-glow 3.2s ease-in-out infinite;
+  }
+
+  .mobile-bottom-nav__item.is-active::after {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+
+  .mobile-bottom-nav__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 999px;
+    font-size: 17px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .mobile-bottom-nav__item.is-active .mobile-bottom-nav__icon {
+    background: rgba(23, 61, 51, 0.1);
+    transform: translateY(-1px) scale(1.04);
+    box-shadow: 0 8px 16px rgba(23, 61, 51, 0.1);
+  }
+
+  .mobile-bottom-nav__label {
+    font-size: 10px;
+    line-height: 1;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+  }
 }

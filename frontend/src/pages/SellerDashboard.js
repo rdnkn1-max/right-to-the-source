@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
+import { pickPrimarySellerBusiness } from "../lib/sellerRouting";
 
 const CATEGORY_OPTIONS = [
   "Fresh Eggs",
@@ -275,6 +276,8 @@ export default function SellerDashboard() {
 
   const [creatingEvent, setCreatingEvent] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
+  const [selectedSavedCalloutItem, setSelectedSavedCalloutItem] = useState("");
+  const [quickCalloutItem, setQuickCalloutItem] = useState("");
 
   useEffect(() => {
     let mounted = true;
@@ -284,17 +287,17 @@ export default function SellerDashboard() {
         setLoading(true);
         setMessage("");
 
-        const { data: userData, error: userError } = await supabase.auth.getUser();
-        if (userError) throw userError;
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
 
-        const user = userData?.user || null;
+        const user = sessionData?.session?.user || null;
 
         console.log("AUTH USER ID:", user?.id);
 
         if (!mounted) return;
 
         if (!user) {
-          navigate("/seller-auth");
+          navigate("/seller-auth", { replace: true });
           return;
         }
 
@@ -304,31 +307,24 @@ export default function SellerDashboard() {
           .from("businesses")
           .select("*")
           .eq("user_id", user.id)
-          .order("created_at", { ascending: false })
-          .limit(1);
+          .order("created_at", { ascending: false });
 
         console.log("BUSINESS ROWS:", businessRows);
         console.log("BUSINESS ERROR:", businessError);
 
         if (businessError) throw businessError;
 
-        const latestBusiness = businessRows?.[0] || null;
+        const latestBusiness = pickPrimarySellerBusiness(businessRows || []);
 
         if (!mounted) return;
 
         if (!latestBusiness) {
-          setBusiness(null);
-          setEvents([]);
+          navigate("/list-your-business", { replace: true });
           return;
         }
 
         if (latestBusiness.status === "pending") {
-          navigate("/application-pending");
-          return;
-        }
-
-        if (latestBusiness.status === "approved" && !latestBusiness.agreed_to_terms) {
-          navigate("/seller-agreement");
+          navigate("/application-pending", { replace: true });
           return;
         }
 
@@ -405,14 +401,9 @@ export default function SellerDashboard() {
               }
 
               if (mounted) setMessage("Payment confirmed. Dashboard unlocked.");
-            } else {
-              navigate(`/payment-setup?businessId=${resolvedBusiness.id}`);
-              return;
             }
           } catch (statusErr) {
             console.error("Auto-unlock check error:", statusErr);
-            navigate(`/payment-setup?businessId=${resolvedBusiness.id}`);
-            return;
           }
         }
 
@@ -443,6 +434,35 @@ export default function SellerDashboard() {
       mounted = false;
     };
   }, [navigate]);
+
+  const savedCalloutItems = useMemo(() => {
+    return Array.from(
+      new Set(
+        [
+          businessForm.featured_product_1_name,
+          businessForm.featured_product_2_name,
+          businessForm.featured_product_3_name,
+        ]
+          .map((item) => String(item || "").trim())
+          .filter(Boolean)
+      )
+    );
+  }, [
+    businessForm.featured_product_1_name,
+    businessForm.featured_product_2_name,
+    businessForm.featured_product_3_name,
+  ]);
+
+  useEffect(() => {
+    if (savedCalloutItems.length === 0) {
+      setSelectedSavedCalloutItem("");
+      return;
+    }
+
+    if (!selectedSavedCalloutItem || !savedCalloutItems.includes(selectedSavedCalloutItem)) {
+      setSelectedSavedCalloutItem(savedCalloutItems[0]);
+    }
+  }, [savedCalloutItems, selectedSavedCalloutItem]);
 
   function handleBusinessChange(field, value) {
     setBusinessForm((prev) => {
@@ -880,6 +900,11 @@ export default function SellerDashboard() {
   const billingLabel = getBillingLabel(business);
   const visibilityLabel = getVisibilityLabel(business);
   const profileCompletion = getProfileCompletion(business);
+  const activeCalloutItem = quickCalloutItem.trim() || selectedSavedCalloutItem.trim();
+  const liveCalloutPreview = activeCalloutItem
+    ? `${activeCalloutItem} is in`
+    : "Your live callout preview will show here.";
+  const liveCalloutCategory = businessForm.category?.trim() || business?.category?.trim() || "No category selected";
 
   if (loading) {
     return (
@@ -976,6 +1001,19 @@ export default function SellerDashboard() {
           </div>
 
           <div style={styles.quickActionsButtons}>
+            <button
+              type="button"
+              style={styles.primaryButtonSmall}
+              onClick={() =>
+                document.getElementById("live-callout-card")?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "start",
+                })
+              }
+            >
+              Notify Customers
+            </button>
+
             <button
               type="button"
               style={styles.primaryButtonSmall}
@@ -1771,6 +1809,101 @@ export default function SellerDashboard() {
           </div>
 
           <div style={styles.sideColumn}>
+            <div id="live-callout-card" style={styles.liveCalloutCard}>
+              <div style={styles.cardHeader}>
+                <div>
+                  <p style={styles.cardEyebrow}>Live Availability</p>
+                  <h3 style={styles.cardTitle}>Notify Customers</h3>
+                  <p style={styles.smallMuted}>
+                    Pick a saved item or add one fast. The send action gets wired in next.
+                  </p>
+                </div>
+              </div>
+
+              <div style={styles.liveCalloutSection}>
+                <div style={styles.calloutSubsection}>
+                  <div style={styles.calloutSectionTop}>
+                    <div>
+                      <h4 style={styles.subsectionTitle}>Saved items</h4>
+                      <p style={styles.ruleText}>
+                        Pulled from your featured products so sellers can move fast.
+                      </p>
+                    </div>
+
+                    <span style={styles.calloutCategoryPill}>{liveCalloutCategory}</span>
+                  </div>
+
+                  {savedCalloutItems.length > 0 ? (
+                    <div style={styles.savedItemGrid}>
+                      {savedCalloutItems.map((item) => {
+                        const isSelected = !quickCalloutItem.trim() && selectedSavedCalloutItem === item;
+
+                        return (
+                          <button
+                            key={item}
+                            type="button"
+                            style={{
+                              ...styles.savedItemButton,
+                              ...(isSelected ? styles.savedItemButtonActive : {}),
+                            }}
+                            onClick={() => {
+                              setSelectedSavedCalloutItem(item);
+                              setQuickCalloutItem("");
+                            }}
+                          >
+                            {item}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div style={styles.calloutHintBox}>
+                      <strong style={styles.calloutHintTitle}>No saved items yet</strong>
+                      <p style={styles.calloutHintText}>
+                        Add featured products to your profile, or use quick add below for now.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div style={styles.calloutSubsection}>
+                  <h4 style={styles.subsectionTitle}>Quick add item</h4>
+                  <input
+                    style={styles.input}
+                    value={quickCalloutItem}
+                    onChange={(e) => setQuickCalloutItem(e.target.value)}
+                    placeholder="Ex. Wahoo"
+                  />
+                  <p style={styles.ruleText}>Type a fresh item anytime without editing your profile.</p>
+                </div>
+
+                <div style={styles.calloutPreviewCard}>
+                  <div style={styles.calloutPreviewTop}>
+                    <div>
+                      <p style={styles.cardEyebrow}>Preview</p>
+                      <h4 style={styles.calloutPreviewMessage}>{liveCalloutPreview}</h4>
+                    </div>
+
+                    <span style={styles.calloutPreviewStatus}>Default live window: 8 hours</span>
+                  </div>
+
+                  <p style={styles.calloutSupportText}>Also visible to everyone nearby</p>
+                  <p style={styles.calloutDevNote}>Step 2 UI is ready. Step 3 will connect the actual send action.</p>
+                </div>
+
+                <button
+                  type="button"
+                  style={{
+                    ...styles.calloutPrimaryButton,
+                    ...styles.calloutPrimaryButtonDisabled,
+                  }}
+                  disabled
+                >
+                  Send to Followers
+                </button>
+              </div>
+            </div>
+
             <div style={styles.billingCard}>
               <div style={styles.cardHeader}>
                 <div>
@@ -2299,6 +2432,14 @@ const styles = {
     padding: "18px",
     boxShadow: "0 14px 30px rgba(15,23,42,0.04)",
   },
+  liveCalloutCard: {
+    background: "linear-gradient(180deg, #ffffff 0%, #f8fafc 100%)",
+    border: "1px solid #dbe4ee",
+    borderRadius: "24px",
+    padding: "20px",
+    boxShadow: "0 16px 36px rgba(15,23,42,0.06)",
+    scrollMarginTop: "18px",
+  },
   statsStrip: {
     display: "grid",
     gridTemplateColumns: "repeat(4, 1fr)",
@@ -2427,6 +2568,70 @@ const styles = {
   displaySection: { display: "flex", flexDirection: "column" },
   sectionDivider: { height: "1px", background: "#e5e7eb", margin: "2px 0" },
   formStack: { display: "flex", flexDirection: "column", gap: "10px", marginTop: "4px" },
+  liveCalloutSection: { display: "flex", flexDirection: "column", gap: "14px" },
+  calloutSubsection: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "10px",
+    padding: "14px",
+    borderRadius: "18px",
+    border: "1px solid #e5e7eb",
+    background: "#ffffff",
+  },
+  calloutSectionTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "10px",
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+  calloutCategoryPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "8px 12px",
+    borderRadius: "999px",
+    background: "#eef2ff",
+    border: "1px solid #c7d2fe",
+    color: "#3730a3",
+    fontWeight: 900,
+    fontSize: "12px",
+    whiteSpace: "nowrap",
+  },
+  savedItemGrid: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "10px",
+  },
+  savedItemButton: {
+    padding: "10px 14px",
+    borderRadius: "999px",
+    border: "1px solid #d1d5db",
+    background: "#ffffff",
+    color: "#0f172a",
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+  savedItemButtonActive: {
+    background: "#111827",
+    border: "1px solid #111827",
+    color: "#ffffff",
+    boxShadow: "0 10px 18px rgba(15,23,42,0.14)",
+  },
+  calloutHintBox: {
+    borderRadius: "16px",
+    border: "1px dashed #cbd5e1",
+    background: "#f8fafc",
+    padding: "14px",
+  },
+  calloutHintTitle: {
+    display: "block",
+    fontSize: "13px",
+    color: "#0f172a",
+    fontWeight: 900,
+    marginBottom: "4px",
+  },
+  calloutHintText: { margin: 0, color: "#64748b", fontSize: "13px", lineHeight: 1.5 },
   twoCol: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" },
   threeCol: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" },
   infoRow: {
@@ -2586,6 +2791,49 @@ const styles = {
     color: "#475569",
     fontSize: "13px",
     lineHeight: 1.7,
+  },
+  calloutPreviewCard: {
+    borderRadius: "18px",
+    border: "1px solid #dbe4ee",
+    background: "linear-gradient(180deg, #f8fafc 0%, #ffffff 100%)",
+    padding: "16px",
+  },
+  calloutPreviewTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: "10px",
+    alignItems: "flex-start",
+    flexWrap: "wrap",
+  },
+  calloutPreviewMessage: {
+    margin: 0,
+    fontSize: "22px",
+    lineHeight: 1.15,
+    fontWeight: 900,
+    color: "#0f172a",
+  },
+  calloutPreviewStatus: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "7px 10px",
+    borderRadius: "999px",
+    background: "#ecfdf3",
+    border: "1px solid #bbf7d0",
+    color: "#027a48",
+    fontWeight: 800,
+    fontSize: "12px",
+  },
+  calloutSupportText: {
+    margin: "10px 0 0 0",
+    fontSize: "13px",
+    color: "#334155",
+    fontWeight: 800,
+  },
+  calloutDevNote: {
+    margin: "6px 0 0 0",
+    fontSize: "12px",
+    color: "#64748b",
+    lineHeight: 1.5,
   },
   selectedDayPanel: { marginTop: "18px", borderTop: "1px solid #e5e7eb", paddingTop: "16px" },
   selectedDayHeader: {
@@ -2754,6 +3002,23 @@ const styles = {
     color: "#ffffff",
     fontWeight: 900,
     cursor: "pointer",
+  },
+  calloutPrimaryButton: {
+    width: "100%",
+    padding: "14px 16px",
+    borderRadius: "999px",
+    border: "none",
+    background: "#111827",
+    color: "#ffffff",
+    fontWeight: 900,
+    fontSize: "14px",
+    cursor: "pointer",
+    boxShadow: "0 12px 22px rgba(15,23,42,0.15)",
+  },
+  calloutPrimaryButtonDisabled: {
+    opacity: 0.5,
+    cursor: "not-allowed",
+    boxShadow: "none",
   },
   messageBox: {
     borderRadius: "16px",

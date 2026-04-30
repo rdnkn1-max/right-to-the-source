@@ -8,10 +8,13 @@ const app = express();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 app.use(cors());
-app.use(express.json());
 
 // ✅ FORCE CORRECT FRONTEND URL (NO OLD PORTS EVER)
 const APP_URL = process.env.APP_URL || "http://localhost:3004";
+const SUPABASE_URL =
+  process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL || "";
+const SUPABASE_SERVICE_ROLE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || "";
 
 // EMAIL SETUP
 const transporter = nodemailer.createTransport({
@@ -24,6 +27,201 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+async function updateBusinessBillingStatus(businessId, values) {
+  return updateBusinessBillingStatusByField("id", businessId, values);
+}
+
+async function updateBusinessBillingStatusByField(field, value, values) {
+  if (!SUPABASE_URL) {
+    throw new Error("Missing SUPABASE_URL for billing update");
+  }
+
+  if (!SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY for billing update");
+  }
+
+  const url = new URL(`${SUPABASE_URL}/rest/v1/businesses`);
+  url.searchParams.set(field, `eq.${value}`);
+
+  const response = await fetch(url, {
+    method: "PATCH",
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+      "Content-Type": "application/json",
+      Prefer: "return=representation",
+    },
+    body: JSON.stringify(values),
+  });
+
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : null;
+
+  if (!response.ok) {
+    throw new Error(data?.message || data?.error || "Supabase business update failed");
+  }
+
+  return Array.isArray(data) ? data[0] || null : data;
+}
+
+app.post(
+  "/api/stripe/webhook",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    let event;
+
+    try {
+      const sig = req.headers["stripe-signature"];
+      event = stripe.webhooks.constructEvent(
+        req.body,
+        sig,
+        process.env.STRIPE_WEBHOOK_SECRET
+      );
+    } catch (err) {
+      console.error("❌ STRIPE WEBHOOK SIGNATURE ERROR:", err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    try {
+      switch (event.type) {
+        case "checkout.session.completed": {
+          const session = event.data.object;
+          const businessId = session.metadata?.businessId || null;
+          const customerId =
+            typeof session.customer === "string"
+              ? session.customer
+              : session.customer?.id || null;
+          const subscriptionId =
+            typeof session.subscription === "string"
+              ? session.subscription
+              : session.subscription?.id || null;
+          const paidUntil = new Date(
+            Date.now() + 30 * 24 * 60 * 60 * 1000
+          ).toISOString();
+
+          if (businessId) {
+            await updateBusinessBillingStatus(businessId, {
+              payment_status: "paid",
+              subscription_status: "active",
+              paid_until: paidUntil,
+              stripe_customer_id: customerId,
+              stripe_subscription_id: subscriptionId,
+            });
+          }
+
+          break;
+        }
+
+        case "invoice.payment_succeeded": {
+          const invoice = event.data.object;
+          const subscriptionId =
+            typeof invoice.subscription === "string"
+              ? invoice.subscription
+              : invoice.subscription?.id || null;
+          const customerId =
+            typeof invoice.customer === "string"
+              ? invoice.customer
+              : invoice.customer?.id || null;
+          const paidUntilUnix =
+            invoice.lines?.data?.[0]?.period?.end || invoice.period_end || null;
+          const updates = {
+            paid_until: paidUntilUnix
+              ? new Date(paidUntilUnix * 1000).toISOString()
+              : null,
+          };
+
+          if (subscriptionId) {
+            await updateBusinessBillingStatusByField(
+              "stripe_subscription_id",
+              subscriptionId,
+              updates
+            );
+          } else if (customerId) {
+            await updateBusinessBillingStatusByField(
+              "stripe_customer_id",
+              customerId,
+              updates
+            );
+          }
+
+          break;
+        }
+
+        case "customer.subscription.updated": {
+          const subscription = event.data.object;
+          const customerId =
+            typeof subscription.customer === "string"
+              ? subscription.customer
+              : subscription.customer?.id || null;
+          const updates = {
+            subscription_status: subscription.status || "active",
+            paid_until: subscription.current_period_end
+              ? new Date(subscription.current_period_end * 1000).toISOString()
+              : null,
+          };
+
+          await updateBusinessBillingStatusByField(
+            "stripe_subscription_id",
+            subscription.id,
+            updates
+          ).catch(async () => {
+            if (customerId) {
+              await updateBusinessBillingStatusByField(
+                "stripe_customer_id",
+                customerId,
+                {
+                  ...updates,
+                  stripe_subscription_id: subscription.id,
+                  stripe_customer_id: customerId,
+                }
+              );
+            }
+          });
+
+          break;
+        }
+
+        case "customer.subscription.deleted": {
+          const subscription = event.data.object;
+          const customerId =
+            typeof subscription.customer === "string"
+              ? subscription.customer
+              : subscription.customer?.id || null;
+          const updates = {
+            subscription_status: "inactive",
+          };
+
+          await updateBusinessBillingStatusByField(
+            "stripe_subscription_id",
+            subscription.id,
+            updates
+          ).catch(async () => {
+            if (customerId) {
+              await updateBusinessBillingStatusByField(
+                "stripe_customer_id",
+                customerId,
+                updates
+              );
+            }
+          });
+
+          break;
+        }
+
+        default:
+          break;
+      }
+
+      return res.json({ received: true });
+    } catch (err) {
+      console.error("❌ STRIPE WEBHOOK ERROR:", err.message);
+      return res.status(500).json({ error: "Webhook handler failed" });
+    }
+  }
+);
+
+app.use(express.json());
+
 app.get("/", (req, res) => {
   res.send("Server is running 🚀");
 });
@@ -33,6 +231,7 @@ console.log("STRIPE KEY PREFIX:", process.env.STRIPE_SECRET_KEY?.slice(0, 8));
 console.log("STRIPE CARD PRICE ID:", process.env.STRIPE_CARD_PRICE_ID);
 console.log("STRIPE ACH PRICE ID:", process.env.STRIPE_ACH_PRICE_ID);
 console.log("APP URL:", APP_URL);
+console.log("SUPABASE_URL:", process.env.SUPABASE_URL);
 console.log("EMAIL FROM:", process.env.EMAIL_FROM);
 console.log("ADMIN NOTIFY EMAIL:", process.env.ADMIN_NOTIFICATION_EMAIL);
 
@@ -113,21 +312,39 @@ app.post("/api/billing/verify-session", async (req, res) => {
     const isPaid =
       session.payment_status === "paid" || session.status === "complete";
 
+    const businessId = session.metadata?.businessId || null;
+    const customerId =
+      typeof session.customer === "string"
+        ? session.customer
+        : session.customer?.id || null;
+    const subscription =
+      typeof session.subscription === "string" ? null : session.subscription || null;
+    const subscriptionId =
+      typeof session.subscription === "string"
+        ? session.subscription
+        : session.subscription?.id || null;
+
+    if (isPaid && businessId) {
+      await updateBusinessBillingStatus(businessId, {
+        payment_status: "paid",
+        subscription_status: subscription?.status || "active",
+        stripe_customer_id: customerId,
+        stripe_subscription_id: subscriptionId,
+        paid_until: subscription?.current_period_end
+          ? new Date(subscription.current_period_end * 1000).toISOString()
+          : null,
+      });
+    }
+
     res.json({
       ok: true,
       session_id: session.id,
       status: session.status,
       payment_status: session.payment_status,
       paid: isPaid,
-      customer_id:
-        typeof session.customer === "string"
-          ? session.customer
-          : session.customer?.id || null,
-      subscription_id:
-        typeof session.subscription === "string"
-          ? session.subscription
-          : session.subscription?.id || null,
-      businessId: session.metadata?.businessId || null,
+      customer_id: customerId,
+      subscription_id: subscriptionId,
+      businessId,
       payment_type: session.metadata?.paymentType || "card",
     });
   } catch (err) {
@@ -227,6 +444,12 @@ app.post("/api/admin/new-submission-notify", async (req, res) => {
 // ==============================
 // START SERVER
 // ==============================
-app.listen(4242, () => {
-  console.log("🔥 SOURCE APP BACKEND RUNNING ON PORT 4242");
-});
+const PORT = process.env.PORT || 4242;
+
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`🔥 SOURCE APP BACKEND RUNNING ON PORT ${PORT}`);
+  });
+}
+
+module.exports = app;

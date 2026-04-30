@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
+import { pickPrimarySellerBusiness } from "../lib/sellerRouting";
 
 const CATEGORY_OPTIONS = [
   "Fresh Eggs",
@@ -79,6 +80,29 @@ export default function ListYourBusiness() {
         const user = data?.session?.user || null;
         setCurrentUser(user);
 
+        if (user) {
+          const { data: businessRows, error: businessError } = await supabase
+            .from("businesses")
+            .select("id, status, user_id, created_at, updated_at")
+            .eq("user_id", user.id)
+            .order("updated_at", { ascending: false, nullsFirst: false })
+            .order("created_at", { ascending: false });
+
+          if (businessError) throw businessError;
+
+          const existingBusiness = pickPrimarySellerBusiness(businessRows || []);
+
+          if (existingBusiness?.status === "approved") {
+            navigate("/seller-dashboard", { replace: true });
+            return;
+          }
+
+          if (existingBusiness?.status === "pending") {
+            navigate("/application-pending", { replace: true });
+            return;
+          }
+        }
+
         if (user?.email) {
           setForm((prev) => ({
             ...prev,
@@ -111,7 +135,7 @@ export default function ListYourBusiness() {
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [navigate]);
 
   const handleLogout = async () => {
     try {
@@ -170,6 +194,15 @@ export default function ListYourBusiness() {
         imageUrl = await uploadBusinessImage();
       }
 
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        alert("You must be logged in");
+        return;
+      }
+
       const payload = {
         user_id: currentUser?.id || null,
         email: currentUser?.email || form.contact_email.trim(),
@@ -194,6 +227,7 @@ export default function ListYourBusiness() {
         location: form.location.trim(),
         admin_notes: form.admin_notes.trim(),
         image_url: imageUrl,
+        user_id: user.id,
         status: "pending",
       };
 
@@ -244,9 +278,10 @@ export default function ListYourBusiness() {
   }
 
   return (
-    <div style={styles.page}>
-      <div style={styles.shell}>
-        <div style={styles.topRow}>
+    <div className="listbiz-page" style={styles.page}>
+      <style>{mobileCss}</style>
+      <div className="listbiz-shell" style={styles.shell}>
+        <div className="listbiz-top-row" style={styles.topRow}>
           <div>
             <p style={styles.eyebrow}>Vendor Setup</p>
             <h1 style={styles.title}>Tell us about your business</h1>
@@ -256,22 +291,22 @@ export default function ListYourBusiness() {
             </p>
           </div>
 
-          <div style={styles.topStatus}>
+          <div className="listbiz-top-status" style={styles.topStatus}>
             <span style={styles.statusPill}>
               {currentUser ? `Logged in as ${currentUser.email}` : "Public submission"}
             </span>
 
             {currentUser ? (
-              <button type="button" style={styles.secondaryButton} onClick={handleLogout}>
+              <button type="button" className="listbiz-secondary-button" style={styles.secondaryButton} onClick={handleLogout}>
                 Log Out
               </button>
             ) : null}
           </div>
         </div>
 
-        <div style={styles.layout}>
-          <div style={styles.leftPanel}>
-            <div style={styles.infoCard}>
+        <div className="listbiz-layout" style={styles.layout}>
+          <div className="listbiz-left-panel" style={styles.leftPanel}>
+            <div className="listbiz-info-card app-animate-card" style={styles.infoCard}>
               <p style={styles.cardEyebrow}>How it works</p>
               <h3 style={styles.cardTitle}>This is your intake form</h3>
               <p style={styles.cardText}>
@@ -312,7 +347,7 @@ export default function ListYourBusiness() {
               </div>
             </div>
 
-            <div style={styles.infoCardSoft}>
+            <div className="listbiz-info-card-soft app-animate-card app-animate-card--delay-1" style={styles.infoCardSoft}>
               <p style={styles.tipTitle}>Vetting tips</p>
               <ul style={styles.tipList}>
                 <li>Get their real contact email and phone number.</li>
@@ -324,9 +359,9 @@ export default function ListYourBusiness() {
             </div>
           </div>
 
-          <div style={styles.formCard}>
-            <form onSubmit={handleSubmit} style={styles.form}>
-              <div style={styles.section}>
+          <div className="listbiz-form-card app-animate-card app-animate-card--delay-1" style={styles.formCard}>
+            <form onSubmit={handleSubmit} style={styles.form} className="listbiz-form">
+              <div className="listbiz-section" style={styles.section}>
                 <p style={styles.sectionEyebrow}>Step 1</p>
                 <h3 style={styles.sectionTitle}>Business identity</h3>
 
@@ -393,7 +428,7 @@ export default function ListYourBusiness() {
 
               <div style={styles.divider} />
 
-              <div style={styles.section}>
+              <div className="listbiz-section" style={styles.section}>
                 <p style={styles.sectionEyebrow}>Step 2</p>
                 <h3 style={styles.sectionTitle}>Business details</h3>
 
@@ -481,7 +516,7 @@ export default function ListYourBusiness() {
 
               <div style={styles.divider} />
 
-              <div style={styles.section}>
+              <div className="listbiz-section" style={styles.section}>
                 <p style={styles.sectionEyebrow}>Step 3</p>
                 <h3 style={styles.sectionTitle}>Location and image</h3>
 
@@ -493,7 +528,7 @@ export default function ListYourBusiness() {
                   onChange={(e) => handleChange("address", e.target.value)}
                 />
 
-                <div style={styles.row2}>
+                <div className="listbiz-row2" style={styles.row2}>
                   <div>
                     <label style={styles.label}>City</label>
                     <input
@@ -532,7 +567,7 @@ export default function ListYourBusiness() {
                     style={{ display: "none" }}
                   />
 
-                  <div style={styles.uploadInner}>
+                  <div className="listbiz-upload-inner" style={styles.uploadInner}>
                     <div style={styles.uploadIcon}>📷</div>
                     <p style={styles.uploadTitle}>
                       {image ? image.name : "Upload a photo"}
@@ -546,7 +581,7 @@ export default function ListYourBusiness() {
 
               <div style={styles.divider} />
 
-              <div style={styles.section}>
+              <div className="listbiz-section" style={styles.section}>
                 <p style={styles.sectionEyebrow}>Step 4</p>
                 <h3 style={styles.sectionTitle}>Admin review note</h3>
 
@@ -559,16 +594,17 @@ export default function ListYourBusiness() {
                 />
               </div>
 
-              <div style={styles.buttonRow}>
+              <div className="listbiz-button-row" style={styles.buttonRow}>
                 <button
                   type="button"
+                  className="listbiz-secondary-button"
                   style={styles.secondaryButton}
                   onClick={() => navigate("/seller-auth")}
                 >
                   Back
                 </button>
 
-                <button type="submit" style={styles.primaryButton} disabled={loading}>
+                <button type="submit" className="listbiz-primary-button" style={styles.primaryButton} disabled={loading}>
                   {loading ? "Submitting..." : "Submit Business"}
                 </button>
               </div>
@@ -927,3 +963,80 @@ const styles = {
     fontWeight: 700,
   },
 };
+
+const mobileCss = `
+  @media (max-width: 767px) {
+    .listbiz-page {
+      padding: 20px 14px calc(var(--safe-bottom) + var(--mobile-bottom-nav-height, 88px) + 28px) !important;
+    }
+
+    .listbiz-top-row {
+      gap: 18px !important;
+      margin-bottom: 18px !important;
+    }
+
+    .listbiz-top-status {
+      width: 100%;
+      align-items: stretch !important;
+    }
+
+    .listbiz-layout {
+      grid-template-columns: 1fr !important;
+      gap: 16px !important;
+    }
+
+    .listbiz-left-panel {
+      gap: 16px !important;
+    }
+
+    .listbiz-info-card,
+    .listbiz-info-card-soft,
+    .listbiz-form-card {
+      padding: 20px 16px !important;
+      border-radius: 24px !important;
+    }
+
+    .listbiz-section {
+      gap: 12px !important;
+    }
+
+    .listbiz-row2 {
+      grid-template-columns: 1fr !important;
+      gap: 12px !important;
+    }
+
+    .listbiz-form input:not([type="file"]),
+    .listbiz-form select,
+    .listbiz-form textarea {
+      min-height: 56px !important;
+      padding: 16px 16px !important;
+      font-size: 16px !important;
+      border-radius: 16px !important;
+    }
+
+    .listbiz-form textarea {
+      min-height: 132px !important;
+    }
+
+    .listbiz-upload-inner {
+      padding: 28px 18px !important;
+      border-radius: 20px !important;
+    }
+
+    .listbiz-button-row {
+      flex-direction: column-reverse;
+      align-items: stretch !important;
+      gap: 12px !important;
+      margin-top: 24px !important;
+    }
+
+    .listbiz-primary-button,
+    .listbiz-secondary-button {
+      width: 100%;
+      min-height: 54px;
+      border-radius: 16px !important;
+      padding: 14px 16px !important;
+      text-align: center;
+    }
+  }
+`;

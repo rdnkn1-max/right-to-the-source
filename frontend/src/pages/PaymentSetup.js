@@ -132,6 +132,7 @@ export default function PaymentSetup() {
   }
 
   const billingLabel = useMemo(() => getBillingStateLabel(business), [business]);
+  const isSubscriptionActive = business?.subscription_status === "active";
 
   if (loading) {
     return (
@@ -285,14 +286,16 @@ export default function PaymentSetup() {
                   <div style={styles.planFeatureDark}>✓ Best for quick activation</div>
                 </div>
 
-                <button
-                  type="button"
-                  style={styles.cardButton}
-                  onClick={() => handleStartCheckout("card")}
-                  disabled={!!startingCheckout}
-                >
-                  {startingCheckout === "card" ? "Opening Checkout..." : "Pay with Card"}
-                </button>
+                {!isSubscriptionActive ? (
+                  <button
+                    type="button"
+                    style={styles.cardButton}
+                    onClick={() => handleStartCheckout("card")}
+                    disabled={!!startingCheckout}
+                  >
+                    {startingCheckout === "card" ? "Opening Checkout..." : "Pay with Card"}
+                  </button>
+                ) : null}
               </div>
 
               <div style={styles.planCardGreen}>
@@ -308,14 +311,16 @@ export default function PaymentSetup() {
                   <div style={styles.planFeature}>✓ Good for long-term billing</div>
                 </div>
 
-                <button
-                  type="button"
-                  style={styles.bankButton}
-                  onClick={() => handleStartCheckout("ach")}
-                  disabled={!!startingCheckout}
-                >
-                  {startingCheckout === "ach" ? "Opening Checkout..." : "Pay with Bank"}
-                </button>
+                {!isSubscriptionActive ? (
+                  <button
+                    type="button"
+                    style={styles.bankButton}
+                    onClick={() => handleStartCheckout("ach")}
+                    disabled={!!startingCheckout}
+                  >
+                    {startingCheckout === "ach" ? "Opening Checkout..." : "Pay with Bank"}
+                  </button>
+                ) : null}
               </div>
             </div>
 

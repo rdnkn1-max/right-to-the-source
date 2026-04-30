@@ -94,7 +94,14 @@ export default function MySellers() {
       setFollowedSellers(normalized);
     } catch (err) {
       console.error("Error loading My Finds:", err);
-      setError(err.message || "Could not load your followed sellers.");
+
+      if ((err?.message || "").toLowerCase().includes("auth session missing")) {
+        setCurrentUser(null);
+        setFollowedSellers([]);
+        setError("");
+      } else {
+        setError(err.message || "Could not load your followed sellers.");
+      }
     } finally {
       setLoading(false);
     }
@@ -428,20 +435,13 @@ export default function MySellers() {
           </div>
         ) : !currentUser ? (
           <div style={styles.emptyWrap}>
-            <h2 style={styles.emptyTitle}>Log in to see your finds</h2>
+            <h2 style={styles.emptyTitle}>Log in to save and revisit your favorite sellers</h2>
             <p style={styles.emptyText}>
-              Create a free visitor profile or log in to keep track of the
-              sellers you follow and come back to them anytime.
+              Keep track of the sellers you follow, jump back into the map fast,
+              and build your own local favorites list.
             </p>
 
             <div style={styles.emptyActions}>
-              <button
-                style={{ ...styles.bigHeaderButton }}
-                onClick={goToSignUp}
-              >
-                Sign Up
-              </button>
-
               <button
                 style={{
                   ...styles.bigHeaderButton,
@@ -452,6 +452,13 @@ export default function MySellers() {
                 onClick={goToLogin}
               >
                 Log In
+              </button>
+
+              <button
+                style={{ ...styles.bigHeaderButton }}
+                onClick={goToSignUp}
+              >
+                Sign Up
               </button>
             </div>
           </div>

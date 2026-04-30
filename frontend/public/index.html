@@ -3,41 +3,146 @@
   <head>
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#000000" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no"
+    />
+    <meta name="theme-color" content="#f6f1e8" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Right to the Source" />
+    <meta name="format-detection" content="telephone=no, date=no, email=no, address=no" />
     <meta
       name="description"
-      content="Web site created using create-react-app"
+      content="Right to the Source helps shoppers discover local businesses, markets, pop-ups, and fresh products nearby."
     />
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
-    <!--
-      manifest.json provides metadata used when your web app is installed on a
-      user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
-    -->
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-    <!--
-      Notice the use of %PUBLIC_URL% in the tags above.
-      It will be replaced with the URL of the `public` folder during the build.
-      Only files inside the `public` folder can be referenced from the HTML.
+    <link rel="preconnect" href="https://veqfyjrxkcwauuscncpd.supabase.co" crossorigin />
+    <link rel="dns-prefetch" href="https://veqfyjrxkcwauuscncpd.supabase.co" />
+    <style>
+      :root {
+        --launch-bg: radial-gradient(circle at top, #faf5ec 0%, #f3ebdf 45%, #ece2d4 100%);
+        --launch-ink: #173d33;
+        --launch-muted: #6d8076;
+        --launch-accent: #f6d365;
+        --app-height: 100vh;
+      }
 
-      Unlike "/favicon.ico" or "favicon.ico", "%PUBLIC_URL%/favicon.ico" will
-      work correctly both with client-side routing and a non-root public URL.
-      Learn how to configure a non-root public URL by running `npm run build`.
-    -->
-    <title>React App</title>
+      html,
+      body,
+      #root {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        min-height: 100%;
+        background: #f6f1e8;
+      }
+
+      body {
+        overscroll-behavior: none;
+      }
+
+      #capacitor-launch-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483647;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--launch-bg);
+        color: var(--launch-ink);
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+        transition: opacity 0.32s ease, visibility 0.32s ease, transform 0.45s ease;
+      }
+
+      html.app-ready #capacitor-launch-screen {
+        opacity: 0;
+        visibility: hidden;
+        transform: scale(1.015);
+        pointer-events: none;
+      }
+
+      .capacitor-launch-screen__inner {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 18px;
+        text-align: center;
+        padding: 32px;
+      }
+
+      .capacitor-launch-screen__icon {
+        width: 104px;
+        height: 104px;
+        border-radius: 28px;
+        box-shadow: 0 18px 50px rgba(23, 61, 51, 0.18);
+      }
+
+      .capacitor-launch-screen__title {
+        font-size: 28px;
+        line-height: 1.05;
+        font-weight: 800;
+        letter-spacing: -0.04em;
+      }
+
+      .capacitor-launch-screen__subtitle {
+        max-width: 250px;
+        font-size: 14px;
+        line-height: 1.5;
+        color: var(--launch-muted);
+        font-weight: 600;
+      }
+
+      .capacitor-launch-screen__spinner {
+        width: 30px;
+        height: 30px;
+        border-radius: 999px;
+        border: 3px solid rgba(23, 61, 51, 0.14);
+        border-top-color: var(--launch-accent);
+        animation: capacitor-launch-spin 0.9s linear infinite;
+      }
+
+      @keyframes capacitor-launch-spin {
+        from {
+          transform: rotate(0deg);
+        }
+
+        to {
+          transform: rotate(360deg);
+        }
+      }
+    </style>
+    <script>
+      (function () {
+        var setAppHeight = function () {
+          document.documentElement.style.setProperty("--app-height", window.innerHeight + "px");
+        };
+
+        setAppHeight();
+        window.addEventListener("resize", setAppHeight);
+        window.addEventListener("orientationchange", setAppHeight);
+      })();
+    </script>
+    <title>Right to the Source</title>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="capacitor-launch-screen" aria-hidden="true">
+      <div class="capacitor-launch-screen__inner">
+        <img
+          class="capacitor-launch-screen__icon"
+          src="%PUBLIC_URL%/capacitor-splash-mark.svg"
+          alt=""
+        />
+        <div class="capacitor-launch-screen__title">Right to the Source</div>
+        <div class="capacitor-launch-screen__subtitle">
+          Discover local sellers, markets, pop-ups, and what’s happening nearby.
+        </div>
+        <div class="capacitor-launch-screen__spinner"></div>
+      </div>
+    </div>
     <div id="root"></div>
-    <!--
-      This HTML file is a template.
-      If you open it directly in the browser, you will see an empty page.
-
-      You can add webfonts, meta tags, or analytics to this file.
-      The build step will place the bundled scripts into the <body> tag.
-
-      To begin the development, run `npm start` or `yarn start`.
-      To create a production bundle, use `npm run build` or `yarn build`.
-    -->
   </body>
 </html>

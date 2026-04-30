@@ -125,14 +125,6 @@ function eventStatusStyle(status) {
   };
 }
 
-function businessStyle() {
-  return {
-    color: "#1f3b2f",
-    fill: "#edf5ef",
-    soft: "#edf5ef",
-  };
-}
-
 function formatDateTime(value) {
   if (!value) return "—";
   return new Date(value).toLocaleString();
@@ -347,6 +339,8 @@ export default function MapView({ homepagePreview = false }) {
       : null;
 
   const routeBusinessId = location.state?.businessId || null;
+  const routeSelectedCategoryKey = location.state?.selectedCategoryKey || null;
+  const routeSelectedCategoryLabel = location.state?.selectedCategoryLabel || null;
 
   const [loading, setLoading] = useState(true);
   const [businesses, setBusinesses] = useState([]);
@@ -361,6 +355,7 @@ export default function MapView({ homepagePreview = false }) {
   const [pendingFollowBusinessName, setPendingFollowBusinessName] = useState("");
   const [followLoadingId, setFollowLoadingId] = useState(null);
   const [showFeatured, setShowFeatured] = useState(true);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   useEffect(() => {
     loadMapData();
@@ -540,6 +535,21 @@ export default function MapView({ homepagePreview = false }) {
     setSelectedCategories((prev) => Array.from(new Set([...prev, ...allKeys])));
   }, [allCategories]);
 
+  useEffect(() => {
+    if (!routeSelectedCategoryKey) {
+      return;
+    }
+
+    const allKeys = allCategories.map((c) => c.key);
+
+    if (!allKeys.includes(routeSelectedCategoryKey)) {
+      return;
+    }
+
+    setSelectedView("all");
+    setSelectedCategories([routeSelectedCategoryKey]);
+  }, [routeSelectedCategoryKey, allCategories]);
+
   function toggleCategory(key) {
     setSelectedCategories((prev) => {
       if (prev.includes(key)) {
@@ -717,6 +727,15 @@ export default function MapView({ homepagePreview = false }) {
     };
   }, [events]);
 
+  const activeCategoryLabel = useMemo(() => {
+    if (selectedCategories.length !== 1) {
+      return null;
+    }
+
+    const matchedCategory = allCategories.find((item) => item.key === selectedCategories[0]);
+    return matchedCategory?.label || routeSelectedCategoryLabel || null;
+  }, [selectedCategories, allCategories, routeSelectedCategoryLabel]);
+
   function focusItemOnMap(item) {
     if (!item) return;
 
@@ -742,8 +761,8 @@ export default function MapView({ homepagePreview = false }) {
   const styles = {
     page: {
       minHeight: "100vh",
-      background: "#f6f1e8",
-      padding: "28px 20px 40px",
+      background: "linear-gradient(180deg, #f8f3ea 0%, #f4ede2 55%, #efe6d8 100%)",
+      padding: "22px 16px 28px",
       fontFamily: "Arial, sans-serif",
       color: "#1f3b2f",
       position: "relative",
@@ -797,8 +816,9 @@ export default function MapView({ homepagePreview = false }) {
       justifyContent: "space-between",
       gap: "12px",
       flexWrap: "wrap",
-      marginTop: "20px",
-      marginBottom: "18px",
+      marginTop: "18px",
+      marginBottom: "16px",
+      alignItems: "center",
     },
     statChips: {
       display: "flex",
@@ -807,12 +827,26 @@ export default function MapView({ homepagePreview = false }) {
     },
     statChip: {
       borderRadius: "999px",
-      background: "#fffdf8",
+      background: "rgba(255,253,248,0.92)",
       border: "1px solid rgba(31,59,47,0.08)",
-      padding: "10px 14px",
+      padding: "11px 15px",
       fontWeight: "bold",
       fontSize: "0.86rem",
-      boxShadow: "0 8px 18px rgba(31,59,47,0.06)",
+      boxShadow: "0 10px 22px rgba(31,59,47,0.06)",
+      backdropFilter: "blur(10px)",
+    },
+    categoryContextPill: {
+      display: "inline-flex",
+      alignItems: "center",
+      padding: "10px 14px",
+      borderRadius: "999px",
+      marginBottom: "12px",
+      background: "rgba(23,61,51,0.08)",
+      border: "1px solid rgba(23,61,51,0.08)",
+      color: "#173d33",
+      fontSize: "0.88rem",
+      fontWeight: "800",
+      boxShadow: "0 8px 18px rgba(31,59,47,0.05)",
     },
     mainStatusRow: {
       display: "flex",
@@ -838,12 +872,13 @@ export default function MapView({ homepagePreview = false }) {
       boxShadow: "0 10px 20px rgba(31,59,47,0.16)",
     },
     categoryScrollerWrap: {
-      background: "rgba(255,253,248,0.98)",
+      background: "rgba(255,253,248,0.96)",
       border: "1px solid rgba(31,59,47,0.08)",
-      borderRadius: "22px",
+      borderRadius: "24px",
       padding: "14px",
-      marginBottom: "20px",
-      boxShadow: "0 10px 28px rgba(31,59,47,0.06)",
+      marginBottom: "18px",
+      boxShadow: "0 12px 28px rgba(31,59,47,0.06)",
+      backdropFilter: "blur(12px)",
     },
     categoryBarTop: {
       display: "flex",
@@ -911,35 +946,37 @@ export default function MapView({ homepagePreview = false }) {
     layout: {
       display: "grid",
       gridTemplateColumns: "minmax(0, 1fr) 330px",
-      gap: "22px",
+      gap: "18px",
       alignItems: "start",
     },
     mapWrap: {
-      background: "#fffdf8",
+      background: "rgba(255,253,248,0.96)",
       border: "1px solid rgba(31,59,47,0.08)",
-      borderRadius: "24px",
-      padding: "16px",
-      boxShadow: "0 16px 36px rgba(31,59,47,0.07)",
+      borderRadius: "28px",
+      padding: "12px",
+      boxShadow: "0 18px 40px rgba(31,59,47,0.08)",
+      backdropFilter: "blur(12px)",
     },
     mapInner: {
       overflow: "hidden",
-      borderRadius: "18px",
-      height: "74vh",
-      minHeight: "640px",
-      boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
+      borderRadius: "22px",
+      height: "78vh",
+      minHeight: "680px",
+      boxShadow: "0 12px 28px rgba(0,0,0,0.1)",
     },
     sidePanel: {
-      background: "#fffdf8",
+      background: "rgba(255,253,248,0.96)",
       border: "1px solid rgba(31,59,47,0.08)",
-      borderRadius: "24px",
+      borderRadius: "28px",
       padding: "16px",
-      height: "74vh",
-      minHeight: "640px",
+      height: "78vh",
+      minHeight: "680px",
       overflow: "hidden",
-      boxShadow: "0 16px 36px rgba(31,59,47,0.07)",
+      boxShadow: "0 18px 40px rgba(31,59,47,0.08)",
       display: "flex",
       flexDirection: "column",
       gap: "14px",
+      backdropFilter: "blur(12px)",
     },
     sectionBlock: {
       display: "flex",
@@ -1111,9 +1148,16 @@ export default function MapView({ homepagePreview = false }) {
       cursor: "pointer",
     },
     loadingBox: {
-      padding: "40px",
+      minHeight: "100vh",
+      padding: "40px 24px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
       textAlign: "center",
       color: "#60766b",
+      background: "linear-gradient(180deg, #f8f3ea 0%, #f4ede2 55%, #efe6d8 100%)",
+      fontSize: "1rem",
+      fontWeight: "700",
     },
     emptyState: {
       color: "#60766b",
@@ -1218,7 +1262,7 @@ export default function MapView({ homepagePreview = false }) {
   };
 
   if (loading) {
-    return <div style={styles.loadingBox}>Loading map…</div>;
+    return <div style={styles.loadingBox}>Loading the live discovery map…</div>;
   }
 
   if (homepagePreview) {
@@ -1298,9 +1342,26 @@ export default function MapView({ homepagePreview = false }) {
       50% { transform: scale(1.18); opacity: 0.78; }
     }
 
+    @keyframes mapSheetUp {
+      from { opacity: 0; transform: translateY(18px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes mapFadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
     .mapview-compact-card:hover {
       transform: translateY(-1px) scale(1.01);
       box-shadow: 0 14px 26px rgba(31,59,47,0.08);
+    }
+
+    .mapview-compact-card {
+      animation: app-card-enter 280ms var(--app-ease) both;
+      transition: transform var(--app-transition-fast) var(--app-ease),
+        box-shadow var(--app-transition-fast) var(--app-ease),
+        background-color var(--app-transition-fast) var(--app-ease);
     }
 
     @media (max-width: 1024px) {
@@ -1313,7 +1374,64 @@ export default function MapView({ homepagePreview = false }) {
       display: none;
     }
 
+    .mapview-mobile-controls {
+      display: none;
+    }
+
+    .mapview-mobile-filter-overlay {
+      display: none;
+    }
+
     @media (max-width: 768px) {
+      .mapview-status-row,
+      .mapview-desktop-filters {
+        display: none !important;
+      }
+
+      .mapview-mobile-controls {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 14px;
+      }
+
+      .mapview-mobile-control-button {
+        min-height: 52px;
+        border-radius: 18px;
+        border: 1px solid rgba(31,59,47,0.08);
+        background: rgba(255,253,248,0.96);
+        color: #1f3b2f;
+        padding: 0 16px;
+        font-weight: 800;
+        box-shadow: 0 10px 24px rgba(31,59,47,0.08);
+        transition: transform var(--app-transition-fast) var(--app-ease),
+          box-shadow var(--app-transition-fast) var(--app-ease),
+          background-color var(--app-transition-fast) var(--app-ease),
+          color var(--app-transition-fast) var(--app-ease);
+      }
+
+      .mapview-mobile-control-button--filters {
+        flex: 1;
+        justify-content: space-between;
+        display: inline-flex;
+        align-items: center;
+      }
+
+      .mapview-mobile-control-button--live {
+        min-width: 122px;
+      }
+
+      .mapview-mobile-control-button.is-active {
+        background: #1f3b2f;
+        color: #fff;
+        border-color: #1f3b2f;
+        box-shadow: 0 14px 28px rgba(31,59,47,0.16);
+      }
+
+      .mapview-mobile-control-button:active {
+        transform: scale(0.98);
+      }
+
       .mapview-sidebar {
         display: none !important;
       }
@@ -1323,31 +1441,81 @@ export default function MapView({ homepagePreview = false }) {
       }
 
       .mapview-map-inner {
-        height: 70vh !important;
-        min-height: 70vh !important;
+        height: calc(100vh - 290px) !important;
+        min-height: 56vh !important;
+      }
+
+      .mapview-map-wrap {
+        padding: 10px !important;
       }
 
       .mapview-filter-bar {
         position: sticky;
-        top: 10px;
+        top: calc(var(--safe-top) + 8px);
         z-index: 1200;
       }
 
       .mapview-mobile-sheet {
         display: block;
         position: fixed;
-        left: 0;
-        right: 0;
-        bottom: 0;
+        left: 10px;
+        right: 10px;
+        bottom: calc(var(--safe-bottom) + var(--mobile-bottom-nav-height, 88px) + 8px);
         z-index: 1300;
         background: rgba(255, 253, 248, 0.98);
-        border-top-left-radius: 16px;
-        border-top-right-radius: 16px;
+        border-radius: 22px;
         box-shadow: 0 -10px 28px rgba(0,0,0,0.12);
-        border-top: 1px solid rgba(31,59,47,0.08);
-        max-height: 60vh;
+        border: 1px solid rgba(31,59,47,0.08);
+        max-height: 48vh;
         overflow: hidden;
-        backdrop-filter: blur(10px);
+        backdrop-filter: blur(12px);
+        animation: mapSheetUp 220ms var(--app-ease) both;
+      }
+
+      .mapview-mobile-filter-overlay {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: rgba(14, 22, 19, 0.34);
+        z-index: 1690;
+        animation: mapFadeIn 180ms ease both;
+      }
+
+      .mapview-mobile-filter-sheet {
+        position: fixed;
+        left: 10px;
+        right: 10px;
+        bottom: calc(var(--safe-bottom) + var(--mobile-bottom-nav-height, 88px) + 8px);
+        z-index: 1700;
+        border-radius: 24px;
+        background: rgba(255,253,248,0.98);
+        border: 1px solid rgba(31,59,47,0.08);
+        box-shadow: 0 18px 42px rgba(0,0,0,0.18);
+        overflow: hidden;
+        backdrop-filter: blur(14px);
+        animation: mapSheetUp 220ms var(--app-ease) both;
+      }
+
+      .mapview-mobile-filter-header {
+        padding: 16px 16px 12px;
+        border-bottom: 1px solid rgba(31,59,47,0.08);
+      }
+
+      .mapview-mobile-filter-body {
+        max-height: calc(58vh - 82px);
+        overflow-y: auto;
+        padding: 16px;
+      }
+
+      .mapview-mobile-filter-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 14px;
+      }
+
+      .mapview-mobile-filter-actions button {
+        min-height: 48px;
+        flex: 1;
       }
 
       .mapview-mobile-sheet summary {
@@ -1366,7 +1534,7 @@ export default function MapView({ homepagePreview = false }) {
       }
 
       .mapview-mobile-sheet-body {
-        max-height: calc(60vh - 80px);
+        max-height: calc(48vh - 80px);
         overflow-y: auto;
         padding: 0 16px 16px;
       }
@@ -1393,20 +1561,43 @@ export default function MapView({ homepagePreview = false }) {
             <span style={styles.liveIndicator} />
           </div>
           <p style={styles.subheading}>
-            Browse live booths, pop-ups, food trucks, local businesses, and fresh
-            local products near you.
+            This is the main discovery experience — open the map, keep filters in
+            view, and jump straight into what’s live and nearby.
           </p>
         </div>
 
         <div style={styles.topBar}>
           <div style={styles.statChips}>
-            <div style={styles.statChip}>Businesses: {filteredBusinesses.length}</div>
-            <div style={styles.statChip}>Live Now: {counts.live}</div>
-            <div style={styles.statChip}>Upcoming: {counts.upcoming}</div>
+            <div style={styles.statChip}>Sellers nearby: {filteredBusinesses.length}</div>
+            <div style={styles.statChip}>Live now: {counts.live}</div>
+            <div style={styles.statChip}>Coming up: {counts.upcoming}</div>
           </div>
         </div>
 
-        <div style={styles.mainStatusRow}>
+        {activeCategoryLabel ? (
+          <div style={styles.categoryContextPill}>Showing {activeCategoryLabel} near you</div>
+        ) : null}
+
+        <div className="mapview-mobile-controls">
+          <button
+            type="button"
+            className="mapview-mobile-control-button mapview-mobile-control-button--filters"
+            onClick={() => setMobileFiltersOpen(true)}
+          >
+            <span>Filters</span>
+            <span>{selectedCategories.length}</span>
+          </button>
+
+          <button
+            type="button"
+            className={`mapview-mobile-control-button mapview-mobile-control-button--live${selectedView === "live" ? " is-active" : ""}`}
+            onClick={() => setSelectedView((prev) => (prev === "live" ? "all" : "live"))}
+          >
+            Live Now
+          </button>
+        </div>
+
+        <div className="mapview-status-row" style={styles.mainStatusRow}>
           {[
             { key: "all", label: "All" },
             { key: "live", label: "Live Now" },
@@ -1429,10 +1620,10 @@ export default function MapView({ homepagePreview = false }) {
           })}
         </div>
 
-        <div className="mapview-filter-bar" style={styles.categoryScrollerWrap}>
+        <div className="mapview-filter-bar mapview-desktop-filters" style={styles.categoryScrollerWrap}>
           <div style={styles.categoryBarTop}>
             <div style={styles.categoryBarTitle}>
-              All categories start on. Tap any one to remove it from the map.
+              Refine the map without losing your place — tap a category to show or hide it.
             </div>
 
             <div style={styles.categoryBarActions}>
@@ -1485,7 +1676,7 @@ export default function MapView({ homepagePreview = false }) {
         ) : null}
 
         <div className="mapview-layout" style={styles.layout}>
-          <div style={styles.mapWrap}>
+          <div className="mapview-map-wrap" style={styles.mapWrap}>
             <div className="mapview-map-inner" style={styles.mapInner}>
               <MapContainer
                 center={mapCenter}
@@ -1901,6 +2092,103 @@ export default function MapView({ homepagePreview = false }) {
             </div>
           </aside>
         </div>
+
+        {mobileFiltersOpen ? (
+          <>
+            <div
+              className="mapview-mobile-filter-overlay"
+              onClick={() => setMobileFiltersOpen(false)}
+            />
+
+            <div className="mapview-mobile-filter-sheet">
+              <div className="mapview-mobile-filter-header">
+                <div style={styles.mobileSheetHandle} />
+                <div style={{ ...styles.mobileSheetTitle, marginTop: 10 }}>Filters</div>
+                <div style={{ ...styles.mobileSheetSub, marginTop: 4 }}>
+                  Fine-tune what shows on the map without changing the underlying filter logic.
+                </div>
+              </div>
+
+              <div className="mapview-mobile-filter-body">
+                <div style={{ ...styles.mobileSheetSection, marginBottom: 18 }}>
+                  <h3 style={styles.sectionTitle}>View</h3>
+
+                  <div style={{ ...styles.mainStatusRow, marginTop: 0, marginBottom: 0 }}>
+                    {[
+                      { key: "all", label: "All" },
+                      { key: "live", label: "Live Now" },
+                      { key: "upcoming", label: "Upcoming" },
+                    ].map((item) => {
+                      const active = selectedView === item.key;
+                      return (
+                        <button
+                          key={`mobile-${item.key}`}
+                          type="button"
+                          onClick={() => setSelectedView(item.key)}
+                          style={{
+                            ...styles.statusButton,
+                            minHeight: "48px",
+                            flex: "1 1 calc(50% - 8px)",
+                            ...(active ? styles.statusButtonActive : {}),
+                          }}
+                        >
+                          {item.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div style={styles.mobileSheetSection}>
+                  <h3 style={styles.sectionTitle}>Categories</h3>
+
+                  <div style={{ ...styles.categoryScroller, flexWrap: "wrap", overflowX: "visible", paddingBottom: 0 }}>
+                    {allCategories.map((cat) => {
+                      const active = selectedCategories.includes(cat.key);
+
+                      return (
+                        <button
+                          key={`mobile-filter-${cat.key}`}
+                          type="button"
+                          onClick={() => toggleCategory(cat.key)}
+                          style={{
+                            ...styles.categoryChip,
+                            minWidth: "calc(50% - 6px)",
+                            minHeight: "50px",
+                            padding: "0 14px",
+                            ...(active ? styles.categoryChipActive : {}),
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <span style={{ fontSize: "14px" }}>{cat.emoji}</span>
+                            <span style={{ textTransform: "capitalize" }}>{cat.label}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mapview-mobile-filter-actions">
+                    <button type="button" onClick={turnAllCategoriesOn} style={styles.miniButton}>
+                      Turn all on
+                    </button>
+                    <button type="button" onClick={clearAllCategories} style={styles.miniButton}>
+                      Clear all
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setMobileFiltersOpen(false)}
+                    style={{ ...styles.primaryModalButton, width: "100%", marginTop: 14 }}
+                  >
+                    Apply Filters
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>
+        ) : null}
 
         <details className="mapview-mobile-sheet">
           <summary>

@@ -32,6 +32,14 @@ export default function SellerAuth() {
           setIsRecoveryMode(true);
           setMessage("Enter your new password below.");
         }
+        return;
+      }
+
+      const { data: sessionData, error } = await supabase.auth.getSession();
+      if (!mounted || error) return;
+
+      if (sessionData?.session?.user) {
+        navigate("/seller-dashboard", { replace: true });
       }
     };
 
@@ -168,7 +176,7 @@ export default function SellerAuth() {
 
         if (error) throw error;
 
-        navigate("/seller-dashboard");
+        navigate("/seller-dashboard", { replace: true });
       } else {
         const { error } = await supabase.auth.signUp({
           email,
