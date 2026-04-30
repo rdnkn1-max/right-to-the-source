@@ -81,7 +81,6 @@ export default function SellerProfile() {
       .from("businesses")
       .select("*")
       .eq("user_id", userId)
-      .order("updated_at", { ascending: false, nullsFirst: false })
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -301,17 +300,9 @@ export default function SellerProfile() {
   const website = fieldOrEmpty(business?.website || business?.website_url);
   const instagram = fieldOrEmpty(business?.instagram || business?.instagram_url);
   const facebook = fieldOrEmpty(business?.facebook || business?.facebook_url);
-  const tiktok = fieldOrEmpty(business?.tiktok || business?.tiktok_url);
-
-  const specialties = [
-    business?.category || "",
-    business?.specialty || "",
-    business?.specialties || "",
-    business?.product_focus || "",
-    business?.what_they_sell || "",
-  ]
-    .filter(Boolean)
-    .join(", ");
+  const businessType = fieldOrEmpty(business?.business_type);
+  const bestContactMethod = fieldOrEmpty(business?.best_contact_method);
+  const whatTheySell = fieldOrEmpty(business?.what_they_sell);
 
   const featuredProducts = [
     {
@@ -961,13 +952,13 @@ export default function SellerProfile() {
               </div>
 
               <div style={styles.infoCard}>
-                <div style={styles.infoLabel}>Live Events</div>
-                <div style={styles.infoValue}>{liveEvents.length}</div>
+                <div style={styles.infoLabel}>Business Type</div>
+                <div style={styles.infoValue}>{businessType || "Not added yet"}</div>
               </div>
 
               <div style={styles.infoCard}>
-                <div style={styles.infoLabel}>Upcoming</div>
-                <div style={styles.infoValue}>{upcomingEvents.length}</div>
+                <div style={styles.infoLabel}>Best Contact Method</div>
+                <div style={styles.infoValue}>{bestContactMethod || "Not added yet"}</div>
               </div>
             </div>
           </div>
@@ -1015,6 +1006,20 @@ export default function SellerProfile() {
                   ))}
                 </div>
               )}
+            </div>
+
+            <div style={styles.section}>
+              <h2 style={styles.sectionTitle}>What they sell</h2>
+              <p style={styles.sectionSubtext}>
+                This comes directly from the seller dashboard so visitors see the same offer the seller keeps updated.
+              </p>
+
+              <div style={styles.aboutCard}>
+                <div style={styles.aboutTitle}>Current seller summary</div>
+                <div style={styles.aboutText}>
+                  {whatTheySell || business.description || business.category || "This seller has not added their current offer yet."}
+                </div>
+              </div>
             </div>
 
             <div style={styles.section}>
@@ -1168,6 +1173,11 @@ export default function SellerProfile() {
                   <div style={styles.contactTitle}>Home Base</div>
                   <div style={styles.contactValue}>{business.location || "Location coming soon"}</div>
                 </div>
+
+                <div style={styles.contactCard}>
+                  <div style={styles.contactTitle}>Best contact method</div>
+                  <div style={styles.contactValue}>{bestContactMethod || "Not added yet"}</div>
+                </div>
               </div>
             </div>
 
@@ -1196,17 +1206,6 @@ export default function SellerProfile() {
                     <div style={styles.socialEmpty}>Not added yet</div>
                   )}
                 </div>
-
-                <div style={styles.socialCard}>
-                  <div style={styles.socialLabel}>TikTok</div>
-                  {tiktok ? (
-                    <a href={normalizeUrl(tiktok)} target="_blank" rel="noreferrer" style={styles.socialLink}>
-                      Open TikTok
-                    </a>
-                  ) : (
-                    <div style={styles.socialEmpty}>Not added yet</div>
-                  )}
-                </div>
               </div>
             </div>
 
@@ -1218,20 +1217,20 @@ export default function SellerProfile() {
                   <div style={styles.highlightEmoji}>{fallbackEmoji}</div>
                   <div style={styles.highlightTitle}>What they sell</div>
                   <div style={styles.highlightText}>
-                    {business.what_they_sell || business.category || "Local products and offerings"}
+                    {whatTheySell || business.category || "Local products and offerings"}
                   </div>
                 </div>
 
                 <div style={styles.highlightCard}>
-                  <div style={styles.highlightEmoji}>📍</div>
-                  <div style={styles.highlightTitle}>Where they’re based</div>
-                  <div style={styles.highlightText}>{business.location || "Location coming soon"}</div>
+                  <div style={styles.highlightEmoji}>🏷️</div>
+                  <div style={styles.highlightTitle}>Business type</div>
+                  <div style={styles.highlightText}>{businessType || "Business type coming soon"}</div>
                 </div>
 
                 <div style={styles.highlightCard}>
-                  <div style={styles.highlightEmoji}>⭐</div>
-                  <div style={styles.highlightTitle}>Specialties</div>
-                  <div style={styles.highlightText}>{specialties || "Specialties can be added later"}</div>
+                  <div style={styles.highlightEmoji}>📞</div>
+                  <div style={styles.highlightTitle}>Best way to reach them</div>
+                  <div style={styles.highlightText}>{bestContactMethod || email || phone || "Contact details coming soon"}</div>
                 </div>
 
                 <div style={styles.highlightCard}>

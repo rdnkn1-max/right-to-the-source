@@ -243,6 +243,7 @@ export default function SellerDashboard() {
   const [currentUser, setCurrentUser] = useState(null);
   const [business, setBusiness] = useState(null);
   const [events, setEvents] = useState([]);
+  const [followersCount, setFollowersCount] = useState(0);
   const [selectedDay, setSelectedDay] = useState(new Date());
 
   const [editMode, setEditMode] = useState(false);
@@ -409,6 +410,17 @@ export default function SellerDashboard() {
 
         setBusiness(resolvedBusiness);
         setBusinessForm(makeBusinessForm(resolvedBusiness));
+
+        const { count: followerTotal, error: followersError } = await supabase
+          .from("follows")
+          .select("id", { count: "exact", head: true })
+          .eq("business_id", resolvedBusiness.id);
+
+        if (followersError) {
+          console.error("Follower count error:", followersError);
+        } else if (mounted) {
+          setFollowersCount(followerTotal || 0);
+        }
 
         const { data: eventRows, error: eventError } = await supabase
           .from("seller_events")
@@ -916,9 +928,10 @@ export default function SellerDashboard() {
 
   if (!business) {
     return (
-      <div style={styles.page}>
-        <div style={styles.shell}>
-          <div style={styles.emptyCard}>
+      <div className="sellerdash-page" style={styles.page}>
+        <style>{mobileCss}</style>
+        <div className="sellerdash-shell" style={styles.shell}>
+          <div className="sellerdash-card" style={styles.emptyCard}>
             <p style={styles.eyebrow}>Seller Dashboard</p>
             <h1 style={styles.emptyTitle}>No business found yet</h1>
             <p style={styles.subtitle}>
@@ -926,7 +939,7 @@ export default function SellerDashboard() {
               from your dashboard.
             </p>
 
-            <div style={styles.inlineButtonRow}>
+            <div className="sellerdash-inline-actions" style={styles.inlineButtonRow}>
               <button
                 type="button"
                 style={styles.primaryButton}
@@ -954,17 +967,18 @@ export default function SellerDashboard() {
     message.toLowerCase().includes("saved");
 
   return (
-    <div style={styles.page}>
-      <div style={styles.shell}>
-        <div style={styles.heroCard}>
-          <div style={styles.heroLeft}>
+    <div className="sellerdash-page" style={styles.page}>
+      <style>{mobileCss}</style>
+      <div className="sellerdash-shell" style={styles.shell}>
+        <div className="sellerdash-card sellerdash-hero-card" style={styles.heroCard}>
+          <div className="sellerdash-hero-left" style={styles.heroLeft}>
             <p style={styles.heroEyebrow}>Right to the Source Seller Dashboard</p>
             <h1 style={styles.heroTitle}>{business.business_name || "Your Business"}</h1>
             <p style={styles.heroSubtitle}>
               Manage your profile, billing, map visibility, and live events from one clean dashboard.
             </p>
 
-            <div style={styles.heroMetaRow}>
+            <div className="sellerdash-hero-meta" style={styles.heroMetaRow}>
               <span
                 style={{
                   ...styles.statusPill,
@@ -980,6 +994,7 @@ export default function SellerDashboard() {
               </span>
 
               <span style={styles.softPill}>Visibility: {visibilityLabel}</span>
+              <span style={styles.softPill}>Followers: {followersCount}</span>
               <span style={styles.softPill}>Profile {profileCompletion}% complete</span>
               <span style={styles.softPill}>
                 Map: {business.latitude && business.longitude ? "Pinned" : "Needs location"}
@@ -987,20 +1002,20 @@ export default function SellerDashboard() {
             </div>
           </div>
 
-          <div style={styles.heroActions}>
+          <div className="sellerdash-hero-actions" style={styles.heroActions}>
             <button type="button" style={styles.secondaryButton} onClick={handleLogout}>
               Log Out
             </button>
           </div>
         </div>
 
-        <div style={styles.quickActionsBar}>
+        <div className="sellerdash-card sellerdash-quick-actions" style={styles.quickActionsBar}>
           <div>
             <p style={styles.quickActionsTitle}>Quick Actions</p>
             <p style={styles.quickActionsText}>Jump straight into the work that keeps your seller profile live.</p>
           </div>
 
-          <div style={styles.quickActionsButtons}>
+          <div className="sellerdash-action-buttons" style={styles.quickActionsButtons}>
             <button
               type="button"
               style={styles.primaryButtonSmall}
@@ -1065,15 +1080,15 @@ export default function SellerDashboard() {
           </div>
         ) : null}
 
-        <div style={styles.statsStrip}>
+        <div className="sellerdash-stats-strip" style={styles.statsStrip}>
           <Stat label="Live Now" value={counts.live} />
           <Stat label="Upcoming" value={counts.upcoming} />
           <Stat label="Completed" value={counts.completed} />
           <Stat label="Total Events" value={counts.total} />
         </div>
 
-        <div style={styles.topGrid}>
-          <div style={styles.businessCard}>
+        <div className="sellerdash-top-grid" style={styles.topGrid}>
+          <div className="sellerdash-card sellerdash-business-card" style={styles.businessCard}>
             <div style={styles.cardHeader}>
               <div>
                 <p style={styles.cardEyebrow}>Business Profile</p>
@@ -1098,21 +1113,22 @@ export default function SellerDashboard() {
               </button>
             </div>
 
-            <div style={styles.businessProfileLayout}>
-              <div style={styles.businessImageColumn}>
-                <div style={styles.businessImageWrap}>
+            <div className="sellerdash-profile-layout" style={styles.businessProfileLayout}>
+              <div className="sellerdash-image-column" style={styles.businessImageColumn}>
+                <div className="sellerdash-image-wrap" style={styles.businessImageWrap}>
                   {businessForm.image_url ? (
                     <img
+                      className="sellerdash-image"
                       src={businessForm.image_url}
                       alt={businessForm.business_name || "Business"}
                       style={styles.businessImage}
                     />
                   ) : (
-                    <div style={styles.businessImagePlaceholder}>No Image</div>
+                    <div className="sellerdash-image-placeholder" style={styles.businessImagePlaceholder}>No Image</div>
                   )}
                 </div>
 
-                <div style={styles.completionCard}>
+                <div className="sellerdash-completion-card" style={styles.completionCard}>
                   <div style={styles.completionTop}>
                     <span style={styles.completionLabel}>Profile completion</span>
                     <strong style={styles.completionPercent}>{profileCompletion}%</strong>
@@ -1808,8 +1824,8 @@ export default function SellerDashboard() {
             </div>
           </div>
 
-          <div style={styles.sideColumn}>
-            <div id="live-callout-card" style={styles.liveCalloutCard}>
+          <div className="sellerdash-side-column" style={styles.sideColumn}>
+            <div id="live-callout-card" className="sellerdash-card" style={styles.liveCalloutCard}>
               <div style={styles.cardHeader}>
                 <div>
                   <p style={styles.cardEyebrow}>Live Availability</p>
@@ -1904,7 +1920,7 @@ export default function SellerDashboard() {
               </div>
             </div>
 
-            <div style={styles.billingCard}>
+            <div className="sellerdash-card" style={styles.billingCard}>
               <div style={styles.cardHeader}>
                 <div>
                   <p style={styles.cardEyebrow}>Billing</p>
@@ -1949,7 +1965,7 @@ export default function SellerDashboard() {
               </div>
             </div>
 
-            <div style={styles.helperCard}>
+            <div className="sellerdash-card" style={styles.helperCard}>
               <p style={styles.cardEyebrow}>Seller Readiness</p>
               <h3 style={styles.cardTitle}>What helps you stand out</h3>
               <ul style={styles.helperList}>
@@ -1963,8 +1979,8 @@ export default function SellerDashboard() {
           </div>
         </div>
 
-        <div style={styles.bottomGrid}>
-          <div style={styles.calendarCard}>
+        <div className="sellerdash-bottom-grid" style={styles.bottomGrid}>
+          <div className="sellerdash-card sellerdash-bottom-card" style={styles.calendarCard}>
             <div style={styles.cardHeader}>
               <div>
                 <p style={styles.cardEyebrow}>Events</p>
@@ -2081,7 +2097,7 @@ export default function SellerDashboard() {
             </div>
           </div>
 
-          <div id="create-event-card" style={styles.eventFormCard}>
+          <div id="create-event-card" className="sellerdash-card sellerdash-bottom-card" style={styles.eventFormCard}>
             <div style={styles.cardHeader}>
               <div>
                 <p style={styles.cardEyebrow}>Go Live</p>
@@ -2632,8 +2648,8 @@ const styles = {
     marginBottom: "4px",
   },
   calloutHintText: { margin: 0, color: "#64748b", fontSize: "13px", lineHeight: 1.5 },
-  twoCol: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" },
-  threeCol: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" },
+  twoCol: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "10px" },
+  threeCol: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "10px" },
   infoRow: {
     display: "flex",
     justifyContent: "space-between",
@@ -3028,3 +3044,109 @@ const styles = {
     marginBottom: "18px",
   },
 };
+
+const mobileCss = `
+  .sellerdash-page {
+    overflow-x: hidden;
+  }
+
+  .sellerdash-shell {
+    width: 100%;
+  }
+
+  @media (max-width: 767px) {
+    .sellerdash-page {
+      padding: 14px 12px calc(var(--safe-bottom) + var(--mobile-bottom-nav-height, 88px) + 26px) !important;
+    }
+
+    .sellerdash-card {
+      padding: 16px !important;
+      border-radius: 20px !important;
+    }
+
+    .sellerdash-hero-card,
+    .sellerdash-quick-actions,
+    .sellerdash-top-grid,
+    .sellerdash-bottom-grid,
+    .sellerdash-profile-layout {
+      display: block !important;
+    }
+
+    .sellerdash-hero-left {
+      max-width: 100% !important;
+    }
+
+    .sellerdash-hero-meta,
+    .sellerdash-action-buttons,
+    .sellerdash-inline-actions,
+    .sellerdash-hero-actions {
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: stretch !important;
+      width: 100% !important;
+      gap: 10px !important;
+    }
+
+    .sellerdash-hero-actions button,
+    .sellerdash-action-buttons button,
+    .sellerdash-inline-actions button {
+      width: 100% !important;
+    }
+
+    .sellerdash-stats-strip {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      gap: 10px !important;
+    }
+
+    .sellerdash-top-grid,
+    .sellerdash-bottom-grid {
+      gap: 14px !important;
+    }
+
+    .sellerdash-side-column {
+      gap: 14px !important;
+      margin-top: 14px !important;
+    }
+
+    .sellerdash-profile-layout {
+      gap: 16px !important;
+    }
+
+    .sellerdash-image-wrap,
+    .sellerdash-image-column,
+    .sellerdash-image,
+    .sellerdash-image-placeholder,
+    .sellerdash-completion-card {
+      width: 100% !important;
+      max-width: 100% !important;
+    }
+
+    .sellerdash-image,
+    .sellerdash-image-placeholder {
+      height: 200px !important;
+    }
+
+    .sellerdash-bottom-card {
+      overflow-x: hidden !important;
+    }
+
+    .sellerdash-bottom-card .calendarGrid {
+      gap: 6px !important;
+    }
+
+    .sellerdash-bottom-card .dayCell,
+    .sellerdash-bottom-card .blankDay {
+      min-height: 74px !important;
+    }
+
+    .sellerdash-bottom-card .dayEventChip,
+    .sellerdash-bottom-card .moreEventsChip {
+      font-size: 9px !important;
+    }
+
+    .sellerdash-page * {
+      max-width: 100%;
+      box-sizing: border-box;
+    }
+  }
+`;

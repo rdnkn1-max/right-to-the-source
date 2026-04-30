@@ -40,9 +40,8 @@ const tabs = [
   {
     label: "Profile",
     icon: "◉",
-    to: "/auth",
-    matches: (pathname) =>
-      pathname === "/auth" || pathname === "/seller-auth" || pathname.startsWith("/seller-profile"),
+    to: "/profile",
+    matches: (pathname) => pathname === "/profile" || pathname === "/auth",
   },
 ];
 

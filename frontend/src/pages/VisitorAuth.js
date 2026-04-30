@@ -23,7 +23,7 @@ export default function VisitorAuth() {
 
       if (error) return alert(error.message);
 
-      navigate("/map");
+      navigate("/profile");
     } else {
       const { error } = await supabase.auth.signUp({
         email,

@@ -10,6 +10,7 @@ import ReviewSubmissions from "./pages/ReviewSubmissions";
 import SellerProfile from "./pages/SellerProfile";
 import SellerDashboard from "./pages/SellerDashboard";
 import VisitorAuth from "./pages/VisitorAuth";
+import VisitorAccount from "./pages/VisitorAccount";
 import MySellers from "./pages/MySellers";
 import ApplicationPending from "./pages/ApplicationPending";
 import SellerAgreement from "./pages/SellerAgreement";
@@ -48,6 +49,7 @@ export default function App() {
 
           {/* VISITOR */}
           <Route path="/auth" element={<VisitorAuth />} />
+          <Route path="/profile" element={<VisitorAccount />} />
           <Route path="/my-sellers" element={<MySellers />} />
           <Route path="/my-finds" element={<MySellers />} />
 

@@ -30,6 +30,32 @@ function getCategoryEmoji(category) {
   return "📍";
 }
 
+function fieldOrEmpty(value) {
+  return value && `${value}`.trim() ? `${value}`.trim() : "";
+}
+
+function formatFollowedDate(value) {
+  if (!value) return "";
+
+  try {
+    return new Date(value).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return "";
+  }
+}
+
+function getSellerSummary(business) {
+  return (
+    fieldOrEmpty(business?.what_they_sell) ||
+    fieldOrEmpty(business?.description) ||
+    "Open their public seller profile or jump straight to their map location."
+  );
+}
+
 export default function MySellers() {
   const navigate = useNavigate();
 
@@ -368,6 +394,14 @@ export default function MySellers() {
       color: "#655d56",
     },
 
+    subMeta: {
+      margin: 0,
+      fontSize: "11px",
+      lineHeight: 1.45,
+      color: "#8a6b4b",
+      fontWeight: "700",
+    },
+
     actionRow: {
       display: "flex",
       gap: "6px",
@@ -481,9 +515,12 @@ export default function MySellers() {
           </div>
         ) : (
           <div style={styles.grid}>
-            {followedSellers.map(({ followId, business }) => {
+            {followedSellers.map(({ followId, createdAt, business }) => {
               const emoji = getCategoryEmoji(business.category);
               const isLive = false;
+              const followedLabel = formatFollowedDate(createdAt);
+              const businessType = fieldOrEmpty(business.business_type);
+              const sellerSummary = getSellerSummary(business);
 
               return (
                 <div key={followId} style={styles.card}>
@@ -512,30 +549,32 @@ export default function MySellers() {
 
                     <p style={styles.meta}>
                       {emoji} {business.category || "Local seller"}
+                      {businessType ? ` • ${businessType}` : ""}
                     </p>
+
+                    {followedLabel ? (
+                      <p style={styles.subMeta}>Saved to My Finds on {followedLabel}</p>
+                    ) : null}
 
                     {business.location ? (
                       <p style={styles.location}>📍 {business.location}</p>
                     ) : null}
 
-                    <p style={styles.description}>
-                      {business.description ||
-                        "Open their profile or jump straight to their map location."}
-                    </p>
+                    <p style={styles.description}>{sellerSummary}</p>
 
                     <div style={styles.actionRow}>
                       <button
                         style={{ ...styles.button, ...styles.primaryButton }}
                         onClick={() => openProfile(business)}
                       >
-                        View
+                        Open Profile
                       </button>
 
                       <button
                         style={styles.button}
                         onClick={() => openMap(business)}
                       >
-                        Map
+                        View on Map
                       </button>
                     </div>
                   </div>
