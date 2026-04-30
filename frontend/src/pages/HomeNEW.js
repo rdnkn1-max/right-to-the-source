@@ -292,6 +292,14 @@ export default function HomeNEW() {
               </button>
             </div>
 
+            <div style={styles.scrollTeaser}>
+              <div style={styles.scrollTeaserDivider} />
+              <div style={styles.scrollTeaserBody}>
+                <span style={styles.scrollTeaserText}>Scroll to see what you can discover nearby</span>
+                <span style={styles.scrollTeaserArrow}>↓</span>
+              </div>
+            </div>
+
             <div style={styles.heroStats}>
               <div style={styles.heroStatCard}>
                 <span style={styles.heroStatNumber}>{businesses.length || "—"}</span>
@@ -653,6 +661,43 @@ const styles = {
     maxWidth: 620,
   },
   ctaRow: { display: "flex", gap: 14, flexWrap: "wrap", marginTop: 28 },
+  scrollTeaser: {
+    marginTop: 18,
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+    maxWidth: 360,
+  },
+  scrollTeaserDivider: {
+    width: "100%",
+    height: 1,
+    background: "linear-gradient(90deg, rgba(23,61,51,0.16) 0%, rgba(23,61,51,0.05) 100%)",
+  },
+  scrollTeaserBody: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 10,
+    color: "#6f6257",
+    fontSize: 13,
+    fontWeight: 800,
+    lineHeight: 1.4,
+  },
+  scrollTeaserText: {
+    letterSpacing: "0.01em",
+  },
+  scrollTeaserArrow: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: 24,
+    height: 24,
+    borderRadius: 999,
+    background: "rgba(23,61,51,0.08)",
+    color: "#173d33",
+    fontSize: 14,
+    fontWeight: 900,
+    flexShrink: 0,
+  },
   primaryLarge: {
     border: "1px solid #173d33",
     background: "linear-gradient(135deg, #173d33 0%, #224e42 100%)",

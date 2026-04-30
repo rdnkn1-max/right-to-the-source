@@ -14,6 +14,15 @@ import { supabase } from "../supabaseClient";
 
 const DEFAULT_CENTER = [28.3886, -80.6969];
 const SELLER_PROFILE_BASE = "/seller-profile";
+const HAPPENING_NOW_PRIMARY = "#22C55E";
+const HAPPENING_NOW_GLOW = "rgba(34, 197, 94, 0.35)";
+const HAPPENING_NOW_SOFT = "rgba(34, 197, 94, 0.14)";
+const HAPPENING_NOW_TEXT = "#166534";
+const HAPPENING_NOW_BORDER = "rgba(34, 197, 94, 0.68)";
+const CURRENTLY_AT_PRIMARY = "#FBD9A7";
+const CURRENTLY_AT_SOFT = "rgba(251, 217, 167, 0.18)";
+const CURRENTLY_AT_BORDER = "rgba(251, 217, 167, 0.7)";
+const CURRENTLY_AT_TEXT = "#7c4a03";
 
 const CATEGORY_PRESETS = [
   { key: "popup", label: "Pop-Ups", emoji: "🎪" },
@@ -93,12 +102,25 @@ function getEventStatus(event) {
   return "scheduled";
 }
 
+function markerLocationKey(businessId, latitude, longitude) {
+  if (!businessId || latitude == null || longitude == null) return null;
+
+  const lat = Number(latitude);
+  const lng = Number(longitude);
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+  return `${businessId}:${lat.toFixed(6)}:${lng.toFixed(6)}`;
+}
+
 function eventStatusStyle(status) {
   if (status === "live") {
     return {
-      color: "#146c43",
-      fill: "#dcf7e8",
-      soft: "#edfdf4",
+      color: HAPPENING_NOW_TEXT,
+      fill: HAPPENING_NOW_PRIMARY,
+      soft: HAPPENING_NOW_SOFT,
+      border: HAPPENING_NOW_BORDER,
+      glow: HAPPENING_NOW_GLOW,
     };
   }
 
@@ -252,69 +274,11 @@ function createPinIcon({ emoji, background, border, isLive = false }) {
   return L.divIcon({
     className: "",
     html: `
-      <div style="
-        position: relative;
-        width: 38px;
-        height: 52px;
-        display: flex;
-        align-items: flex-start;
-        justify-content: center;
-      ">
-        ${
-          isLive
-            ? `<div style="
-                position:absolute;
-                top:-2px;
-                left:50%;
-                transform:translateX(-50%);
-                width:26px;
-                height:26px;
-                border-radius:999px;
-                background: rgba(20,108,67,0.18);
-                box-shadow: 0 0 0 8px rgba(20,108,67,0.10);
-              "></div>`
-            : ""
-        }
-        <div style="
-          position: relative;
-          width: 34px;
-          height: 34px;
-          border-radius: 999px;
-          background: ${background};
-          border: 3px solid ${border};
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 17px;
-          box-shadow: 0 8px 18px rgba(0,0,0,0.20);
-          z-index: 2;
-        ">
-          ${emoji}
-        </div>
-        <div style="
-          position:absolute;
-          top:28px;
-          left:50%;
-          transform:translateX(-50%);
-          width:0;
-          height:0;
-          border-left:8px solid transparent;
-          border-right:8px solid transparent;
-          border-top:14px solid ${border};
-          z-index:1;
-        "></div>
-        <div style="
-          position:absolute;
-          top:27px;
-          left:50%;
-          transform:translateX(-50%);
-          width:0;
-          height:0;
-          border-left:6px solid transparent;
-          border-right:6px solid transparent;
-          border-top:11px solid ${background};
-          z-index:2;
-        "></div>
+      <div class="map-pin${isLive ? " map-pin--active" : ""}" style="--pin-background:${background}; --pin-border:${border}; --pin-glow:${HAPPENING_NOW_GLOW};">
+        ${isLive ? '<div class="map-pin__pulse"></div>' : ""}
+        <div class="map-pin__body">${emoji}</div>
+        <div class="map-pin__tip map-pin__tip--outer"></div>
+        <div class="map-pin__tip map-pin__tip--inner"></div>
       </div>
     `,
     iconSize: [38, 52],
@@ -628,7 +592,7 @@ export default function MapView({ homepagePreview = false }) {
         businessId: event.businesses.id,
         icon: getCategoryIcon(event.businesses?.category, event.type),
         title: event.businesses?.business_name || event.title || "Business",
-        subtitle: event.businesses?.category || event.type || "Live now",
+        subtitle: event.businesses?.category || event.type || "Pop-Up At",
         eventTitle: event.title || "",
         lat: event.latitude,
         lng: event.longitude,
@@ -727,6 +691,24 @@ export default function MapView({ homepagePreview = false }) {
     };
   }, [events]);
 
+  const liveEventMarkerKeys = useMemo(() => {
+    return new Set(
+      filteredEvents
+        .filter(
+          (event) =>
+            event.computedStatus === "live" && event.latitude != null && event.longitude != null
+        )
+        .map((event) =>
+          markerLocationKey(
+            event.business_id || event.businesses?.id,
+            event.latitude,
+            event.longitude
+          )
+        )
+        .filter(Boolean)
+    );
+  }, [filteredEvents]);
+
   const activeCategoryLabel = useMemo(() => {
     if (selectedCategories.length !== 1) {
       return null;
@@ -800,9 +782,9 @@ export default function MapView({ homepagePreview = false }) {
       width: "8px",
       height: "8px",
       borderRadius: "999px",
-      background: "#e14646",
-      boxShadow: "0 0 0 6px rgba(225,70,70,0.12)",
-      animation: "mapLivePulse 1.8s ease-in-out infinite",
+      background: HAPPENING_NOW_PRIMARY,
+      boxShadow: `0 0 0 6px ${HAPPENING_NOW_SOFT}`,
+      animation: "mapHappeningPulse 1.8s ease-in-out infinite",
       flexShrink: 0,
     },
     subheading: {
@@ -820,20 +802,52 @@ export default function MapView({ homepagePreview = false }) {
       marginBottom: "16px",
       alignItems: "center",
     },
+    topStatusActions: {
+      display: "flex",
+      alignItems: "center",
+      gap: "10px",
+      flexWrap: "wrap",
+    },
     statChips: {
       display: "flex",
       gap: "10px",
       flexWrap: "wrap",
     },
-    statChip: {
+    topPillBase: {
+      height: "36px",
+      padding: "0 14px",
       borderRadius: "999px",
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: "13px",
+      fontWeight: 600,
+      lineHeight: 1,
+      whiteSpace: "nowrap",
+    },
+    statChip: {
       background: "rgba(255,253,248,0.92)",
       border: "1px solid rgba(31,59,47,0.08)",
-      padding: "11px 15px",
-      fontWeight: "bold",
-      fontSize: "0.86rem",
       boxShadow: "0 10px 22px rgba(31,59,47,0.06)",
       backdropFilter: "blur(10px)",
+    },
+    sellersNearbyChip: {
+      background: "rgba(255, 249, 240, 0.96)",
+      border: "1px solid rgba(145, 120, 90, 0.18)",
+      color: "#6b5845",
+      boxShadow: "0 8px 18px rgba(107, 88, 69, 0.06)",
+    },
+    comingUpChip: {
+      background: "rgba(232, 239, 245, 0.96)",
+      border: "1px solid rgba(128, 150, 170, 0.26)",
+      color: "#4f6476",
+      boxShadow: "0 8px 18px rgba(79, 100, 118, 0.07)",
+    },
+    happeningNowChip: {
+      background: HAPPENING_NOW_SOFT,
+      border: `1px solid ${HAPPENING_NOW_BORDER}`,
+      color: HAPPENING_NOW_TEXT,
+      boxShadow: "none",
     },
     categoryContextPill: {
       display: "inline-flex",
@@ -859,9 +873,6 @@ export default function MapView({ homepagePreview = false }) {
       border: "1px solid rgba(0,0,0,0.06)",
       background: "rgba(255,253,248,0.96)",
       color: "#1f3b2f",
-      borderRadius: "999px",
-      padding: "10px 16px",
-      fontWeight: "bold",
       cursor: "pointer",
       boxShadow: "0 6px 14px rgba(31,59,47,0.04)",
     },
@@ -870,6 +881,20 @@ export default function MapView({ homepagePreview = false }) {
       color: "#fff",
       borderColor: "#1f3b2f",
       boxShadow: "0 10px 20px rgba(31,59,47,0.16)",
+    },
+    currentlyAtButton: {
+      border: `1px solid ${CURRENTLY_AT_BORDER}`,
+      background: CURRENTLY_AT_SOFT,
+      color: CURRENTLY_AT_TEXT,
+      cursor: "pointer",
+      boxShadow: "0 8px 18px rgba(124, 74, 3, 0.06)",
+      backdropFilter: "blur(10px)",
+    },
+    currentlyAtButtonActive: {
+      background: "rgba(251, 217, 167, 0.28)",
+      border: `1px solid ${CURRENTLY_AT_BORDER}`,
+      color: CURRENTLY_AT_TEXT,
+      boxShadow: "none",
     },
     categoryScrollerWrap: {
       background: "rgba(255,253,248,0.96)",
@@ -1089,6 +1114,11 @@ export default function MapView({ homepagePreview = false }) {
       fontSize: "15px",
       flexShrink: 0,
     },
+    compactIconLive: {
+      background: HAPPENING_NOW_SOFT,
+      border: `1px solid ${HAPPENING_NOW_PRIMARY}`,
+      boxShadow: `0 0 0 6px rgba(34, 197, 94, 0.12)`,
+    },
     compactTitleWrap: {
       minWidth: 0,
       flex: 1,
@@ -1120,6 +1150,29 @@ export default function MapView({ homepagePreview = false }) {
       fontWeight: "800",
       marginBottom: "6px",
       textTransform: "capitalize",
+    },
+    happeningNowBadge: {
+      background: HAPPENING_NOW_SOFT,
+      color: HAPPENING_NOW_TEXT,
+      border: `1px solid ${HAPPENING_NOW_BORDER}`,
+      boxShadow: "none",
+    },
+    currentlyAtButton: {
+      borderRadius: "999px",
+      background: CURRENTLY_AT_SOFT,
+      border: `1px solid ${CURRENTLY_AT_BORDER}`,
+      color: CURRENTLY_AT_TEXT,
+      padding: "11px 15px",
+      fontWeight: "bold",
+      fontSize: "0.86rem",
+      boxShadow: "none",
+      cursor: "pointer",
+    },
+    currentlyAtButtonActive: {
+      background: CURRENTLY_AT_PRIMARY,
+      borderColor: CURRENTLY_AT_BORDER,
+      color: CURRENTLY_AT_TEXT,
+      boxShadow: "none",
     },
     compactActionRow: {
       marginTop: "8px",
@@ -1169,6 +1222,142 @@ export default function MapView({ homepagePreview = false }) {
       display: "flex",
       gap: "8px",
       flexWrap: "wrap",
+    },
+    popupCard: {
+      width: "min(260px, 72vw)",
+      color: "#1f3b2f",
+    },
+    popupStatusRow: {
+      display: "flex",
+      flexWrap: "wrap",
+      gap: "6px",
+      marginBottom: "10px",
+    },
+    popupStatusChip: {
+      display: "inline-flex",
+      alignItems: "center",
+      borderRadius: "999px",
+      padding: "5px 10px",
+      fontSize: "0.72rem",
+      fontWeight: "800",
+      lineHeight: 1,
+    },
+    popupHappeningNowChip: {
+      background: HAPPENING_NOW_SOFT,
+      color: HAPPENING_NOW_TEXT,
+      border: `1px solid ${HAPPENING_NOW_BORDER}`,
+    },
+    popupCurrentlyAtChip: {
+      background: CURRENTLY_AT_SOFT,
+      color: CURRENTLY_AT_TEXT,
+      border: `1px solid ${CURRENTLY_AT_BORDER}`,
+    },
+    popupHeader: {
+      display: "flex",
+      alignItems: "flex-start",
+      gap: "10px",
+      marginBottom: "10px",
+    },
+    popupIcon: {
+      width: "36px",
+      height: "36px",
+      borderRadius: "999px",
+      background: "#edf5ef",
+      border: "1px solid #d9e0d7",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: "18px",
+      flexShrink: 0,
+    },
+    popupTitleWrap: {
+      minWidth: 0,
+      flex: 1,
+    },
+    popupTitle: {
+      margin: 0,
+      fontSize: "1rem",
+      fontWeight: "800",
+      lineHeight: 1.2,
+      color: "#1f3b2f",
+    },
+    popupEventTitle: {
+      margin: 0,
+      fontSize: "1.12rem",
+      fontWeight: "900",
+      lineHeight: 1.18,
+      color: "#14281f",
+    },
+    popupBusinessName: {
+      margin: "6px 0 0",
+      fontSize: "0.8rem",
+      color: "#60766b",
+      lineHeight: 1.35,
+      fontWeight: "700",
+    },
+    popupSubtitle: {
+      margin: "3px 0 0",
+      fontSize: "0.82rem",
+      color: "#60766b",
+      lineHeight: 1.4,
+    },
+    popupLocation: {
+      marginTop: "10px",
+      padding: "10px 12px",
+      borderRadius: "14px",
+      background: "rgba(248, 243, 234, 0.78)",
+      border: "1px solid rgba(31,59,47,0.08)",
+      color: "#41584d",
+      fontSize: "0.86rem",
+      lineHeight: 1.45,
+    },
+    popupDetailList: {
+      marginTop: "10px",
+      display: "flex",
+      flexDirection: "column",
+      gap: "6px",
+    },
+    popupDetailRow: {
+      fontSize: "0.82rem",
+      color: "#60766b",
+      lineHeight: 1.4,
+    },
+    popupDetailLabel: {
+      color: "#1f3b2f",
+      fontWeight: "700",
+      marginRight: "6px",
+    },
+    popupNote: {
+      marginTop: "10px",
+      fontSize: "0.84rem",
+      color: "#41584d",
+      lineHeight: 1.45,
+    },
+    popupActionRow: {
+      marginTop: "12px",
+      display: "flex",
+      gap: "8px",
+      flexWrap: "wrap",
+    },
+    popupPrimaryAction: {
+      padding: "9px 14px",
+      background: "#173d33",
+      color: "#ffffff",
+      border: "none",
+      borderRadius: "999px",
+      fontWeight: "800",
+      fontSize: "0.82rem",
+      cursor: "pointer",
+    },
+    popupSecondaryAction: {
+      padding: "9px 14px",
+      background: "#fff",
+      color: "#173d33",
+      border: "1px solid #d9e0d7",
+      borderRadius: "999px",
+      fontWeight: "800",
+      fontSize: "0.82rem",
+      cursor: "pointer",
     },
     followButton: {
       padding: "8px 12px",
@@ -1308,7 +1497,7 @@ export default function MapView({ homepagePreview = false }) {
                 icon={createPinIcon({
                   emoji,
                   background: visual.fill,
-                  border: visual.color,
+                  border: visual.border || visual.color,
                   isLive: event.computedStatus === "live",
                 })}
               />
@@ -1316,7 +1505,12 @@ export default function MapView({ homepagePreview = false }) {
           })}
 
         {filteredBusinesses
-          .filter((business) => business.latitude != null && business.longitude != null)
+          .filter((business) => {
+            if (business.latitude == null || business.longitude == null) return false;
+
+            const markerKey = markerLocationKey(business.id, business.latitude, business.longitude);
+            return !markerKey || !liveEventMarkerKeys.has(markerKey);
+          })
           .map((business) => {
             const emoji = getCategoryIcon(business.category, "");
 
@@ -1328,6 +1522,7 @@ export default function MapView({ homepagePreview = false }) {
                   emoji,
                   background: "#edf5ef",
                   border: "#1f3b2f",
+                  isLive: false,
                 })}
               />
             );
@@ -1337,9 +1532,86 @@ export default function MapView({ homepagePreview = false }) {
   }
 
   const mapViewCss = `
-    @keyframes mapLivePulse {
-      0%, 100% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(1.18); opacity: 0.78; }
+    @keyframes livePulse {
+      0% {
+        transform: translateX(-50%) scale(0.8);
+        opacity: 0.6;
+      }
+      70% {
+        transform: translateX(-50%) scale(1.8);
+        opacity: 0;
+      }
+      100% {
+        transform: translateX(-50%) scale(1.8);
+        opacity: 0;
+      }
+    }
+
+    .map-pin {
+      position: relative;
+      width: 38px;
+      height: 52px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+    }
+
+    .map-pin__pulse {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 50%;
+      width: 34px;
+      height: 34px;
+      transform: translateX(-50%) scale(0.8);
+      border-radius: 50%;
+      background: rgba(34, 197, 94, 0.35);
+      border: none;
+      z-index: 0;
+      animation: livePulse 2s ease-out infinite;
+      pointer-events: none;
+      will-change: transform, opacity;
+    }
+
+    .map-pin__body {
+      position: relative;
+      width: 34px;
+      height: 34px;
+      flex-shrink: 0;
+      border-radius: 999px;
+      background: var(--pin-background);
+      border: 3px solid var(--pin-border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 17px;
+      box-shadow: 0 8px 18px rgba(0,0,0,0.20);
+      z-index: 2;
+      transition: transform 180ms ease-in-out;
+    }
+
+    .map-pin__tip {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+    }
+
+    .map-pin__tip--outer {
+      top: 28px;
+      border-left: 8px solid transparent;
+      border-right: 8px solid transparent;
+      border-top: 14px solid var(--pin-border);
+      z-index: 1;
+    }
+
+    .map-pin__tip--inner {
+      top: 27px;
+      border-left: 6px solid transparent;
+      border-right: 6px solid transparent;
+      border-top: 11px solid var(--pin-background);
+      z-index: 2;
     }
 
     @keyframes mapSheetUp {
@@ -1396,14 +1668,18 @@ export default function MapView({ homepagePreview = false }) {
       }
 
       .mapview-mobile-control-button {
-        min-height: 52px;
-        border-radius: 18px;
-        border: 1px solid rgba(31,59,47,0.08);
-        background: rgba(255,253,248,0.96);
+        height: 36px;
+        min-height: 36px;
+        border-radius: 999px;
+        border: 1px solid rgba(31,59,47,0.1);
+        background: rgba(255, 252, 246, 0.98);
         color: #1f3b2f;
-        padding: 0 16px;
-        font-weight: 800;
-        box-shadow: 0 10px 24px rgba(31,59,47,0.08);
+        padding: 0 14px;
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1;
+        white-space: nowrap;
+        box-shadow: 0 8px 18px rgba(31,59,47,0.08);
         transition: transform var(--app-transition-fast) var(--app-ease),
           box-shadow var(--app-transition-fast) var(--app-ease),
           background-color var(--app-transition-fast) var(--app-ease),
@@ -1415,17 +1691,41 @@ export default function MapView({ homepagePreview = false }) {
         justify-content: space-between;
         display: inline-flex;
         align-items: center;
+        gap: 10px;
       }
++
++      .mapview-mobile-control-button__label {
++        display: inline-flex;
++        align-items: center;
++        min-width: 0;
++      }
++
++      .mapview-mobile-control-button__badge {
++        display: inline-flex;
++        align-items: center;
++        justify-content: center;
++        min-width: 24px;
++        height: 24px;
++        padding: 0 8px;
++        border-radius: 999px;
++        background: rgba(31,59,47,0.08);
++        border: 1px solid rgba(31,59,47,0.08);
++        color: #173d33;
++        font-size: 12px;
++        font-weight: 700;
++        line-height: 1;
++        flex-shrink: 0;
++      }
 
       .mapview-mobile-control-button--live {
         min-width: 122px;
       }
 
       .mapview-mobile-control-button.is-active {
-        background: #1f3b2f;
-        color: #fff;
-        border-color: #1f3b2f;
-        box-shadow: 0 14px 28px rgba(31,59,47,0.16);
+        background: ${HAPPENING_NOW_PRIMARY};
+        color: ${HAPPENING_NOW_TEXT};
+        border-color: ${HAPPENING_NOW_BORDER};
+        box-shadow: 0 14px 28px ${HAPPENING_NOW_GLOW};
       }
 
       .mapview-mobile-control-button:active {
@@ -1568,9 +1868,26 @@ export default function MapView({ homepagePreview = false }) {
 
         <div style={styles.topBar}>
           <div style={styles.statChips}>
-            <div style={styles.statChip}>Sellers nearby: {filteredBusinesses.length}</div>
-            <div style={styles.statChip}>Live now: {counts.live}</div>
-            <div style={styles.statChip}>Coming up: {counts.upcoming}</div>
+            <div style={{ ...styles.topPillBase, ...styles.statChip, ...styles.sellersNearbyChip }}>
+              Sellers nearby: {filteredBusinesses.length}
+            </div>
+            <div style={{ ...styles.topPillBase, ...styles.statChip, ...styles.happeningNowChip }}>
+              Get It Now: {counts.live}
+            </div>
+            <div style={{ ...styles.topPillBase, ...styles.statChip, ...styles.comingUpChip }}>
+              Coming up: {counts.upcoming}
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedView((prev) => (prev === "live" ? "all" : "live"))}
+              style={{
+                ...styles.topPillBase,
+                ...styles.currentlyAtButton,
+                ...(selectedView === "live" ? styles.currentlyAtButtonActive : {}),
+              }}
+            >
+              Pop-Up At
+            </button>
           </div>
         </div>
 
@@ -1584,23 +1901,14 @@ export default function MapView({ homepagePreview = false }) {
             className="mapview-mobile-control-button mapview-mobile-control-button--filters"
             onClick={() => setMobileFiltersOpen(true)}
           >
-            <span>Filters</span>
-            <span>{selectedCategories.length}</span>
-          </button>
-
-          <button
-            type="button"
-            className={`mapview-mobile-control-button mapview-mobile-control-button--live${selectedView === "live" ? " is-active" : ""}`}
-            onClick={() => setSelectedView((prev) => (prev === "live" ? "all" : "live"))}
-          >
-            Live Now
+            <span className="mapview-mobile-control-button__label">Browse Categories</span>
+            <span className="mapview-mobile-control-button__badge">{selectedCategories.length}</span>
           </button>
         </div>
 
         <div className="mapview-status-row" style={styles.mainStatusRow}>
           {[
             { key: "all", label: "All" },
-            { key: "live", label: "Live Now" },
             { key: "upcoming", label: "Upcoming" },
           ].map((item) => {
             const active = selectedView === item.key;
@@ -1610,8 +1918,10 @@ export default function MapView({ homepagePreview = false }) {
                 type="button"
                 onClick={() => setSelectedView(item.key)}
                 style={{
+                  ...styles.topPillBase,
                   ...styles.statusButton,
                   ...(active ? styles.statusButtonActive : {}),
+                  ...(active && item.key === "live" ? styles.happeningNowChip : {}),
                 }}
               >
                 {item.label}
@@ -1722,75 +2032,76 @@ export default function MapView({ homepagePreview = false }) {
                         icon={createPinIcon({
                           emoji,
                           background: visual.fill,
-                          border: visual.color,
+                          border: visual.border || visual.color,
                           isLive: event.computedStatus === "live",
                         })}
                       >
                         <Popup>
-                          <div style={{ minWidth: "250px" }}>
-                            <div
-                              style={{
-                                display: "inline-block",
-                                marginBottom: "8px",
-                                padding: "4px 10px",
-                                borderRadius: "999px",
-                                background: visual.soft,
-                                color: visual.color,
-                                fontWeight: "bold",
-                                textTransform: "capitalize",
-                                fontSize: "0.78rem",
-                              }}
-                            >
-                              {event.computedStatus}
+                          <div style={styles.popupCard}>
+                            <div style={styles.popupStatusRow}>
+                              {event.computedStatus === "live" ? (
+                                <div style={{ ...styles.popupStatusChip, ...styles.popupHappeningNowChip }}>
+                                  Get It Now
+                                </div>
+                              ) : null}
+
+                              {event.computedStatus === "live" ? (
+                                <div style={{ ...styles.popupStatusChip, ...styles.popupCurrentlyAtChip }}>
+                                  Pop-Up At
+                                </div>
+                              ) : null}
                             </div>
 
-                            <div style={{ fontWeight: "bold", marginBottom: "4px" }}>
-                              {emoji} {event.title}
+                            <div style={styles.popupHeader}>
+                              <div style={styles.popupIcon}>{emoji}</div>
+                              <div style={styles.popupTitleWrap}>
+                                <h3 style={styles.popupEventTitle}>
+                                  {event.computedStatus === "live"
+                                    ? `Now at ${event.title || "Current Event"} 🔥`
+                                    : event.title || "Current Event"}
+                                </h3>
+                                {event.businesses?.business_name ? (
+                                  <p style={styles.popupBusinessName}>{event.businesses.business_name}</p>
+                                ) : null}
+                              </div>
                             </div>
 
-                            <div style={{ marginBottom: "4px" }}>
-                              {event.businesses?.business_name}
-                            </div>
-
-                            <div style={{ color: "#60766b", fontSize: "0.9rem" }}>
-                              Category: {event.businesses?.category || "—"}
-                            </div>
-
-                            <div style={{ color: "#60766b", fontSize: "0.9rem" }}>
-                              Event Type: {event.type || "—"}
-                            </div>
-
-                            <div style={{ color: "#60766b", fontSize: "0.9rem", marginTop: "6px" }}>
-                              {event.address || event.city || "Location coming soon"}
-                            </div>
-
-                            <div
-                              style={{
-                                color: "#60766b",
-                                fontSize: "0.9rem",
-                                marginTop: "6px",
-                              }}
-                            >
-                              Starts: {formatDateTime(event.start_time)}
-                            </div>
-
-                            <div style={{ color: "#60766b", fontSize: "0.9rem" }}>
-                              Ends: {formatDateTime(event.end_time)}
-                            </div>
-
-                            {event.note ? (
-                              <div style={{ marginTop: "8px", fontSize: "0.9rem" }}>
-                                {event.note}
+                            {event.address || event.city || event.state ? (
+                              <div style={styles.popupLocation}>
+                                {event.address || [event.city, event.state].filter(Boolean).join(", ")}
                               </div>
                             ) : null}
 
-                            <div style={styles.actionRow}>
+                            <div style={styles.popupDetailList}>
+                              <div style={styles.popupDetailRow}>
+                                <span style={styles.popupDetailLabel}>Category</span>
+                                {event.businesses?.category || "—"}
+                              </div>
+                              <div style={styles.popupDetailRow}>
+                                <span style={styles.popupDetailLabel}>Type</span>
+                                {event.type || "—"}
+                              </div>
+                              <div style={styles.popupDetailRow}>
+                                <span style={styles.popupDetailLabel}>Starts</span>
+                                {formatDateTime(event.start_time)}
+                              </div>
+                              <div style={styles.popupDetailRow}>
+                                <span style={styles.popupDetailLabel}>Ends</span>
+                                {formatDateTime(event.end_time)}
+                              </div>
+                            </div>
+
+                            {event.note ? (
+                              <div style={{ ...styles.popupNote, color: "#6b7f75", fontSize: "0.8rem" }}>{event.note}</div>
+                            ) : null}
+
+                            <div style={styles.popupActionRow}>
                               <button
                                 type="button"
                                 onClick={() => openSellerProfile(event.businesses?.id)}
-                                style={styles.openButton}
+                                style={styles.popupPrimaryAction}
                               >
-                                Open
+                                View Profile
                               </button>
 
                               <button
@@ -1803,7 +2114,7 @@ export default function MapView({ homepagePreview = false }) {
                                 }
                                 disabled={followLoadingId === event.business_id}
                                 style={{
-                                  ...styles.followButton,
+                                  ...styles.popupSecondaryAction,
                                   opacity: followLoadingId === event.business_id ? 0.7 : 1,
                                 }}
                               >
@@ -1821,7 +2132,17 @@ export default function MapView({ homepagePreview = false }) {
                   })}
 
                 {filteredBusinesses
-                  .filter((business) => business.latitude != null && business.longitude != null)
+                  .filter((business) => {
+                    if (business.latitude == null || business.longitude == null) return false;
+
+                    const markerKey = markerLocationKey(
+                      business.id,
+                      business.latitude,
+                      business.longitude
+                    );
+
+                    return !markerKey || !liveEventMarkerKeys.has(markerKey);
+                  })
                   .map((business) => {
                     const emoji = getCategoryIcon(business.category, "");
                     const isTargeted =
@@ -1835,38 +2156,40 @@ export default function MapView({ homepagePreview = false }) {
                           emoji,
                           background: isTargeted ? "#fff3d8" : "#edf5ef",
                           border: isTargeted ? "#9a6700" : "#1f3b2f",
-                          isLive: isTargeted,
+                          isLive: false,
                         })}
                       >
                         <Popup>
-                          <div style={{ minWidth: "220px" }}>
-                            <div style={{ fontWeight: "bold", marginBottom: "4px" }}>
-                              {emoji} {business.business_name}
+                          <div style={styles.popupCard}>
+                            <div style={styles.popupHeader}>
+                              <div style={styles.popupIcon}>{emoji}</div>
+                              <div style={styles.popupTitleWrap}>
+                                <h3 style={styles.popupTitle}>
+                                  {business.business_name || "Business"}
+                                </h3>
+                                <p style={styles.popupSubtitle}>
+                                  {business.category || "Local business"}
+                                </p>
+                              </div>
                             </div>
 
-                            <div style={{ color: "#60766b", marginBottom: "6px" }}>
-                              {business.category || "Local business"}
-                            </div>
-
-                            {business.location ? (
-                              <div style={{ color: "#60766b", fontSize: "0.9rem" }}>
-                                {business.location}
+                            {business.address || business.location ? (
+                              <div style={styles.popupLocation}>
+                                {business.address || business.location}
                               </div>
                             ) : null}
 
                             {business.description ? (
-                              <div style={{ marginTop: "8px", fontSize: "0.9rem" }}>
-                                {business.description}
-                              </div>
+                              <div style={styles.popupNote}>{business.description}</div>
                             ) : null}
 
-                            <div style={styles.actionRow}>
+                            <div style={styles.popupActionRow}>
                               <button
                                 type="button"
                                 onClick={() => openSellerProfile(business.id)}
-                                style={styles.openButton}
+                                style={styles.popupPrimaryAction}
                               >
-                                Open
+                                View Profile
                               </button>
 
                               <button
@@ -1876,7 +2199,7 @@ export default function MapView({ homepagePreview = false }) {
                                 }
                                 disabled={followLoadingId === business.id}
                                 style={{
-                                  ...styles.followButton,
+                                  ...styles.popupSecondaryAction,
                                   opacity: followLoadingId === business.id ? 0.7 : 1,
                                 }}
                               >
@@ -1958,7 +2281,7 @@ export default function MapView({ homepagePreview = false }) {
 
             <div style={styles.sectionBlock}>
               <div style={styles.sectionHeader}>
-                <h3 style={styles.sectionTitle}>🔴 Live now</h3>
+                <h3 style={styles.sectionTitle}>✨ Get It Now</h3>
               </div>
 
               <div style={styles.sectionScroller}>
@@ -1975,16 +2298,15 @@ export default function MapView({ homepagePreview = false }) {
                         <div
                           style={{
                             ...styles.badge,
-                            background: visual.fill,
-                            color: visual.color,
+                            ...styles.happeningNowBadge,
                           }}
                         >
-                          live
+                          Get It Now
                         </div>
 
                         <div style={styles.compactTop}>
                           <div style={styles.compactIdentity}>
-                            <div style={styles.compactIcon}>{item.icon}</div>
+                            <div style={{ ...styles.compactIcon, ...styles.compactIconLive }}>{item.icon}</div>
 
                             <div style={styles.compactTitleWrap}>
                               <p style={styles.compactTitle}>{item.title}</p>
@@ -2116,7 +2438,7 @@ export default function MapView({ homepagePreview = false }) {
                   <div style={{ ...styles.mainStatusRow, marginTop: 0, marginBottom: 0 }}>
                     {[
                       { key: "all", label: "All" },
-                      { key: "live", label: "Live Now" },
+                      { key: "live", label: "Pop-Up At" },
                       { key: "upcoming", label: "Upcoming" },
                     ].map((item) => {
                       const active = selectedView === item.key;
@@ -2126,8 +2448,8 @@ export default function MapView({ homepagePreview = false }) {
                           type="button"
                           onClick={() => setSelectedView(item.key)}
                           style={{
+                            ...styles.topPillBase,
                             ...styles.statusButton,
-                            minHeight: "48px",
                             flex: "1 1 calc(50% - 8px)",
                             ...(active ? styles.statusButtonActive : {}),
                           }}
@@ -2190,142 +2512,6 @@ export default function MapView({ homepagePreview = false }) {
           </>
         ) : null}
 
-        <details className="mapview-mobile-sheet">
-          <summary>
-            <div style={styles.mobileSheetHandle} />
-            <div style={styles.mobileSheetTitle}>Live now</div>
-            <div style={styles.mobileSheetSub}>Tap to browse what’s live and nearby</div>
-          </summary>
-
-          <div className="mapview-mobile-sheet-body">
-            <div style={styles.mobileSheetSection}>
-              <h3 style={styles.sectionTitle}>🔴 Live now</h3>
-
-              {liveNowItems.length === 0 ? (
-                <div style={styles.emptyState}>Nothing live right now.</div>
-              ) : (
-                liveNowItems.map((item) => {
-                  const visual = eventStatusStyle("live");
-                  const sellerId = item.raw?.businesses?.id;
-                  const sellerName = item.raw?.businesses?.business_name || item.title;
-
-                  return (
-                    <div key={`mobile-live-${item.id}`} className="mapview-compact-card" style={styles.compactCard}>
-                      <div
-                        style={{
-                          ...styles.badge,
-                          background: visual.fill,
-                          color: visual.color,
-                        }}
-                      >
-                        live
-                      </div>
-
-                      <div style={styles.compactTop}>
-                        <div style={styles.compactIdentity}>
-                          <div style={styles.compactIcon}>{item.icon}</div>
-
-                          <div style={styles.compactTitleWrap}>
-                            <p style={styles.compactTitle}>{item.title}</p>
-                            <p style={styles.compactSub}>{item.subtitle}</p>
-                          </div>
-                        </div>
-
-                        <div style={styles.distanceText}>
-                          {item.distance != null ? `${item.distance.toFixed(1)} mi` : "—"}
-                        </div>
-                      </div>
-
-                      <div style={styles.compactActionRow}>
-                        <button
-                          type="button"
-                          style={styles.smallSecondaryButton}
-                          onClick={() => openSellerProfile(sellerId)}
-                        >
-                          Open
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleFollow(item.raw?.business_id, sellerName)}
-                          disabled={followLoadingId === item.raw?.business_id}
-                          style={{
-                            ...styles.smallPrimaryButton,
-                            opacity: followLoadingId === item.raw?.business_id ? 0.7 : 1,
-                          }}
-                        >
-                          {followLoadingId === item.raw?.business_id ? "Following..." : "Follow"}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-
-            <div style={styles.mobileSheetSection}>
-              <h3 style={styles.sectionTitle}>📍 Nearby businesses</h3>
-
-              {nearbyBusinesses.length === 0 ? (
-                <div style={styles.emptyState}>No nearby businesses match right now.</div>
-              ) : (
-                nearbyBusinesses.map((item) => {
-                  const sellerId = item.raw?.id;
-                  const sellerName = item.raw?.business_name || item.title;
-
-                  return (
-                    <div key={`mobile-nearby-${item.id}`} className="mapview-compact-card" style={styles.compactCard}>
-                      <div style={styles.compactTop}>
-                        <div style={styles.compactIdentity}>
-                          <div style={styles.compactIcon}>{item.icon}</div>
-
-                          <div style={styles.compactTitleWrap}>
-                            <p style={styles.compactTitle}>{item.title}</p>
-                            <p style={styles.compactSub}>{item.subtitle}</p>
-                          </div>
-                        </div>
-
-                        <div style={styles.distanceText}>
-                          {item.distance != null ? `${item.distance.toFixed(1)} mi` : "—"}
-                        </div>
-                      </div>
-
-                      <div style={styles.compactActionRow}>
-                        <button
-                          type="button"
-                          style={styles.smallSecondaryButton}
-                          onClick={() => openSellerProfile(sellerId)}
-                        >
-                          View
-                        </button>
-
-                        <button
-                          type="button"
-                          style={styles.smallPrimaryButton}
-                          onClick={() => focusItemOnMap(item)}
-                        >
-                          Map
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleFollow(sellerId, sellerName)}
-                          disabled={followLoadingId === sellerId}
-                          style={{
-                            ...styles.smallSecondaryButton,
-                            opacity: followLoadingId === sellerId ? 0.7 : 1,
-                          }}
-                        >
-                          {followLoadingId === sellerId ? "Following..." : "Follow"}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </details>
       </div>
 
       {authPromptOpen ? (

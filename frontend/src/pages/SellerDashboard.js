@@ -99,6 +99,13 @@ function getEventStatus(event) {
   return "scheduled";
 }
 
+function isActiveCurrentEvent(event) {
+  if (!event?.is_active) return false;
+
+  const status = getEventStatus(event);
+  return status === "live" || status === "upcoming" || status === "scheduled";
+}
+
 function toDatetimeLocalValue(date) {
   const d = new Date(date);
   const pad = (n) => String(n).padStart(2, "0");
@@ -204,6 +211,39 @@ async function geocodeRawAddress(addressParts) {
   }
 }
 
+async function geocodeBusinessAddress(formState) {
+  const fullAddressParts = [
+    formState?.address?.trim(),
+    formState?.city?.trim(),
+    formState?.state?.trim(),
+    formState?.zip?.trim(),
+  ].filter(Boolean);
+
+  if (fullAddressParts.length > 0) {
+    const geo = await geocodeRawAddress(fullAddressParts);
+    if (!geo.error && geo.latitude != null && geo.longitude != null) {
+      return geo;
+    }
+
+    const locationFallback = String(formState?.location || "").trim();
+    if (!locationFallback) return geo;
+
+    const fallbackGeo = await geocodeRawAddress([locationFallback]);
+    if (!fallbackGeo.error && fallbackGeo.latitude != null && fallbackGeo.longitude != null) {
+      return fallbackGeo;
+    }
+
+    return fallbackGeo.error ? fallbackGeo : geo;
+  }
+
+  const locationFallback = String(formState?.location || "").trim();
+  if (!locationFallback) {
+    return { latitude: null, longitude: null, error: "Add an address first." };
+  }
+
+  return geocodeRawAddress([locationFallback]);
+}
+
 function makeBusinessForm(data) {
   return {
     business_name: data?.business_name || "",
@@ -277,8 +317,10 @@ export default function SellerDashboard() {
 
   const [creatingEvent, setCreatingEvent] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
+  const [sendingCallout, setSendingCallout] = useState(false);
   const [selectedSavedCalloutItem, setSelectedSavedCalloutItem] = useState("");
   const [quickCalloutItem, setQuickCalloutItem] = useState("");
+  const [showPastEvents, setShowPastEvents] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -584,13 +626,6 @@ export default function SellerDashboard() {
         nextFeaturedProduct3ImageUrl = await uploadFeaturedImage(featuredImages.f3, "f3");
       }
 
-      const addressParts = [
-        businessForm.address.trim(),
-        businessForm.city.trim(),
-        businessForm.state.trim(),
-        businessForm.zip.trim(),
-      ];
-
       let nextLatitude =
         business.latitude != null && Number.isFinite(Number(business.latitude))
           ? Number(business.latitude)
@@ -601,10 +636,16 @@ export default function SellerDashboard() {
           ? Number(business.longitude)
           : null;
 
-      const hasAddress = addressParts.filter(Boolean).length > 0;
+      const hasAddress = [
+        businessForm.address.trim(),
+        businessForm.city.trim(),
+        businessForm.state.trim(),
+        businessForm.zip.trim(),
+        businessForm.location.trim(),
+      ].some(Boolean);
 
       if (hasAddress) {
-        const geo = await geocodeRawAddress(addressParts);
+        const geo = await geocodeBusinessAddress(businessForm);
 
         if (!geo.error && geo.latitude != null && geo.longitude != null) {
           nextLatitude = geo.latitude;
@@ -676,13 +717,15 @@ export default function SellerDashboard() {
     }
   }
 
-  async function geocodeAddress() {
-    const addressParts = [
+  async function geocodeAddress(addressOverride) {
+    const addressParts = (addressOverride || [
       eventForm.address,
       eventForm.city,
       eventForm.state,
       eventForm.zip,
-    ].filter(Boolean);
+    ])
+      .map((part) => String(part || "").trim())
+      .filter(Boolean);
 
     if (addressParts.length === 0) {
       setMessage("Add an address before geocoding.");
@@ -696,6 +739,10 @@ export default function SellerDashboard() {
       const geo = await geocodeRawAddress(addressParts);
 
       if (geo.error || geo.latitude == null || geo.longitude == null) {
+        console.warn("Current Event geocode failed:", {
+          addressParts,
+          error: geo.error || "Could not geocode that address.",
+        });
         setMessage(geo.error || "Could not geocode that address.");
         return null;
       }
@@ -724,6 +771,11 @@ export default function SellerDashboard() {
     setMessage("");
 
     try {
+      if (activeCurrentEvents.length > 0 && eventForm.is_active) {
+        setMessage("You already have an active Current Event. End it before saving a new one.");
+        return;
+      }
+
       const start = new Date(eventForm.start_time);
       const end = eventForm.end_time ? new Date(eventForm.end_time) : null;
 
@@ -750,12 +802,35 @@ export default function SellerDashboard() {
       let latitude = eventForm.latitude ? Number(eventForm.latitude) : null;
       let longitude = eventForm.longitude ? Number(eventForm.longitude) : null;
 
-      if (!latitude || !longitude) {
-        const geocoded = await geocodeAddress();
-        if (!geocoded) return;
+      if (!Number.isFinite(latitude)) latitude = null;
+      if (!Number.isFinite(longitude)) longitude = null;
 
-        latitude = geocoded.latitude;
-        longitude = geocoded.longitude;
+      if (latitude == null || longitude == null) {
+        const geocoded = await geocodeAddress([
+          eventForm.address,
+          eventForm.city,
+          eventForm.state,
+          eventForm.zip,
+        ]);
+
+        if (!geocoded) {
+          if (eventForm.is_active) {
+            setMessage(
+              "Could not geocode the Current Event location. Add a valid address or coordinates before saving it live."
+            );
+            return;
+          }
+        } else {
+          latitude = geocoded.latitude;
+          longitude = geocoded.longitude;
+        }
+      }
+
+      if (eventForm.is_active && (latitude == null || longitude == null)) {
+        setMessage(
+          "An active Current Event needs valid coordinates. Update the address or geocode it first."
+        );
+        return;
       }
 
       const fullAddress = [
@@ -803,17 +878,143 @@ export default function SellerDashboard() {
         is_active: true,
       });
 
-      setMessage("Event created successfully.");
+      setMessage("Current Event saved successfully.");
     } catch (err) {
       console.error("Event error:", err);
 
       if (err.message?.includes("seller_events_max_7_days")) {
-        setMessage("Events cannot be longer than 7 days.");
+        setMessage("Current Events cannot be longer than 7 days.");
       } else {
-        setMessage(err.message || "Could not create event.");
+        setMessage(err.message || "Could not save Current Event.");
       }
     } finally {
       setCreatingEvent(false);
+    }
+  }
+
+  async function handleEndCurrentEvent() {
+    if (!business || activeCurrentEvents.length === 0) return;
+
+    setCreatingEvent(true);
+    setMessage("");
+
+    try {
+      const nowIso = new Date().toISOString();
+      const activeIds = activeCurrentEvents.map((event) => event.id).filter(Boolean);
+
+      if (activeIds.length === 0) {
+        setMessage("No active Current Event found.");
+        return;
+      }
+
+      const { error } = await supabase
+        .from("seller_events")
+        .update({
+          is_active: false,
+          end_time: nowIso,
+        })
+        .in("id", activeIds);
+
+      if (error) throw error;
+
+      await reloadEvents(business.id);
+      setMessage("Current Event ended.");
+    } catch (err) {
+      console.error("End current event error:", err);
+      setMessage(err.message || "Could not end Current Event.");
+    } finally {
+      setCreatingEvent(false);
+    }
+  }
+
+  async function handleSendLiveCallout() {
+    console.log("GO LIVE TAP RECEIVED", {
+      businessId: business?.id || null,
+      activeCalloutItem,
+      quickCalloutItem,
+      selectedSavedCalloutItem,
+    });
+    setMessage("Go Live tapped. Creating live callout...");
+
+    if (!business) return;
+
+    const calloutText = liveCalloutPreview.trim();
+
+    if (!activeCalloutItem) {
+      setMessage("Add or select an item before sending to followers.");
+      return;
+    }
+
+    setSendingCallout(true);
+    setMessage("");
+
+    try {
+      const now = new Date();
+      const end = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+      const fullAddress = [business.address, business.city, business.state, business.zip]
+        .filter(Boolean)
+        .join(", ");
+
+      let latitude =
+        business.latitude != null && Number.isFinite(Number(business.latitude))
+          ? Number(business.latitude)
+          : null;
+      let longitude =
+        business.longitude != null && Number.isFinite(Number(business.longitude))
+          ? Number(business.longitude)
+          : null;
+
+      if (latitude == null || longitude == null) {
+        const geocoded = await geocodeAddress([
+          business.address,
+          business.city,
+          business.state,
+          business.zip,
+        ]);
+
+        if (!geocoded) {
+          console.warn("Live callout geocode failed:", {
+            businessId: business.id,
+            address: fullAddress || business.location || "",
+          });
+          setMessage(
+            "Could not geocode your business address for this live callout. Update or geocode the address first."
+          );
+          return;
+        }
+
+        latitude = geocoded.latitude;
+        longitude = geocoded.longitude;
+      }
+
+      const payload = {
+        business_id: business.id,
+        title: calloutText,
+        type: "popup",
+        address: fullAddress || business.location || "",
+        city: String(business.city || "").trim(),
+        state: String(business.state || "").trim(),
+        latitude,
+        longitude,
+        start_time: now.toISOString(),
+        end_time: end.toISOString(),
+        is_active: true,
+        note: calloutText,
+      };
+
+      const { error } = await supabase.from("seller_events").insert([payload]);
+
+      if (error) throw error;
+
+      await reloadEvents(business.id);
+      setSelectedDay(new Date());
+      setQuickCalloutItem("");
+      setMessage(`Live callout sent: ${calloutText}`);
+    } catch (err) {
+      console.error("Live callout error:", err);
+      setMessage(err.message || "Could not send live callout.");
+    } finally {
+      setSendingCallout(false);
     }
   }
 
@@ -879,9 +1080,27 @@ export default function SellerDashboard() {
     };
   }, [events]);
 
+  const visibleDashboardEvents = useMemo(() => {
+    return events.filter((event) => isActiveCurrentEvent(event));
+  }, [events]);
+
   const selectedDayEvents = useMemo(() => {
-    return events.filter((event) => isDateInEventRange(selectedDay, event));
-  }, [events, selectedDay]);
+    return visibleDashboardEvents.filter((event) => isDateInEventRange(selectedDay, event));
+  }, [visibleDashboardEvents, selectedDay]);
+
+  const activeCurrentEvents = useMemo(() => {
+    return [...visibleDashboardEvents]
+      .filter((event) => isActiveCurrentEvent(event))
+      .sort((a, b) => new Date(b.start_time || 0).getTime() - new Date(a.start_time || 0).getTime());
+  }, [visibleDashboardEvents]);
+
+  const pastEvents = useMemo(() => {
+    return [...events]
+      .filter((event) => !isActiveCurrentEvent(event))
+      .sort((a, b) => new Date(b.start_time || 0).getTime() - new Date(a.start_time || 0).getTime());
+  }, [events]);
+
+  const activeCurrentEvent = activeCurrentEvents[0] || null;
 
   const currentMonth = selectedDay.getMonth();
   const currentYear = selectedDay.getFullYear();
@@ -912,9 +1131,11 @@ export default function SellerDashboard() {
   const billingLabel = getBillingLabel(business);
   const visibilityLabel = getVisibilityLabel(business);
   const profileCompletion = getProfileCompletion(business);
-  const activeCalloutItem = quickCalloutItem.trim() || selectedSavedCalloutItem.trim();
+  const quickCalloutValue = String(quickCalloutItem || "").trim();
+  const selectedCalloutValue = String(selectedSavedCalloutItem || "").trim();
+  const activeCalloutItem = quickCalloutValue || selectedCalloutValue;
   const liveCalloutPreview = activeCalloutItem
-    ? `${activeCalloutItem} is in`
+    ? activeCalloutItem
     : "Your live callout preview will show here.";
   const liveCalloutCategory = businessForm.category?.trim() || business?.category?.trim() || "No category selected";
 
@@ -1825,13 +2046,17 @@ export default function SellerDashboard() {
           </div>
 
           <div className="sellerdash-side-column" style={styles.sideColumn}>
-            <div id="live-callout-card" className="sellerdash-card" style={styles.liveCalloutCard}>
+            <div
+              id="live-callout-card"
+              className="sellerdash-card sellerdash-live-callout-card"
+              style={styles.liveCalloutCard}
+            >
               <div style={styles.cardHeader}>
                 <div>
                   <p style={styles.cardEyebrow}>Live Availability</p>
                   <h3 style={styles.cardTitle}>Notify Customers</h3>
                   <p style={styles.smallMuted}>
-                    Pick a saved item or add one fast. The send action gets wired in next.
+                    Pick a saved item or add one fast, then go live in one tap.
                   </p>
                 </div>
               </div>
@@ -1904,18 +2129,28 @@ export default function SellerDashboard() {
                   </div>
 
                   <p style={styles.calloutSupportText}>Also visible to everyone nearby</p>
-                  <p style={styles.calloutDevNote}>Step 2 UI is ready. Step 3 will connect the actual send action.</p>
+                  <p style={styles.calloutDevNote}>This creates a live event now and keeps it visible for the default live window.</p>
                 </div>
 
                 <button
                   type="button"
-                  style={{
-                    ...styles.calloutPrimaryButton,
-                    ...styles.calloutPrimaryButtonDisabled,
+                  className="sellerdash-callout-button"
+                  style={
+                    sendingCallout
+                      ? {
+                          ...styles.calloutPrimaryButton,
+                          ...styles.calloutPrimaryButtonDisabled,
+                        }
+                      : styles.calloutPrimaryButton
+                  }
+                  onClick={handleSendLiveCallout}
+                  onTouchEnd={(e) => {
+                    e.preventDefault();
+                    handleSendLiveCallout();
                   }}
-                  disabled
+                  disabled={sendingCallout}
                 >
-                  Send to Followers
+                  {sendingCallout ? "Going Live..." : "Go Live"}
                 </button>
               </div>
             </div>
@@ -1985,7 +2220,7 @@ export default function SellerDashboard() {
               <div>
                 <p style={styles.cardEyebrow}>Events</p>
                 <h3 style={styles.cardTitle}>Event calendar</h3>
-                <p style={styles.smallMuted}>Click any day to see what’s booked there.</p>
+                <p style={styles.smallMuted}>Click any day to see active or upcoming pop-up events.</p>
               </div>
 
               <div style={styles.calendarNav}>
@@ -2013,7 +2248,7 @@ export default function SellerDashboard() {
 
                 const isSelected = dateObj.toDateString() === selectedDay.toDateString();
 
-                const dayEvents = events.filter((event) =>
+                const dayEvents = visibleDashboardEvents.filter((event) =>
                   isDateInEventRange(dateObj, event)
                 );
 
@@ -2061,7 +2296,7 @@ export default function SellerDashboard() {
               </div>
 
               {selectedDayEvents.length === 0 ? (
-                <p style={styles.smallMuted}>No events on this day yet.</p>
+                <p style={styles.smallMuted}>No active or upcoming pop-up events on this day.</p>
               ) : (
                 <div style={styles.selectedDayList}>
                   {selectedDayEvents.map((event) => (
@@ -2100,155 +2335,282 @@ export default function SellerDashboard() {
           <div id="create-event-card" className="sellerdash-card sellerdash-bottom-card" style={styles.eventFormCard}>
             <div style={styles.cardHeader}>
               <div>
-                <p style={styles.cardEyebrow}>Go Live</p>
-                <h3 style={styles.cardTitle}>Create live event</h3>
+                <p style={styles.cardEyebrow}>Pop-Up Event</p>
+                <h3 style={styles.cardTitle}>Pop-Up Event</h3>
                 <p style={styles.smallMuted}>
-                  Add your exact event address so your business can appear on the map.
+                  Use this form for a temporary pop-up or event location so customers know where to find you right now.
                 </p>
               </div>
             </div>
 
             <div style={styles.formStack}>
-              <label style={styles.label}>Event title</label>
-              <input
-                style={styles.input}
-                value={eventForm.title}
-                onChange={(e) => handleEventChange("title", e.target.value)}
-                placeholder="Ex. RDNKN Booth"
-              />
+              <div style={styles.eventFormSection}>
+                <h4 style={styles.subsectionTitle}>Active Pop-Up Event</h4>
+                <p style={styles.eventFormIntroText}>
+                  This is your live temporary event location that shows up on the map right now.
+                </p>
 
-              <label style={styles.label}>Type</label>
-              <select
-                style={styles.select}
-                value={eventForm.type}
-                onChange={(e) => handleEventChange("type", e.target.value)}
-              >
-                {EVENT_TYPE_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
+                {activeCurrentEvent ? (
+                  <div style={styles.currentEventActiveCard}>
+                    <div style={styles.currentEventLiveBanner}>🟢 You are LIVE right now</div>
 
-              <label style={styles.label}>Street address</label>
-              <input
-                style={styles.input}
-                value={eventForm.address}
-                onChange={(e) => handleEventChange("address", e.target.value)}
-                placeholder="Ex. 123 Main St"
-              />
+                    <div style={styles.currentEventActiveTop}>
+                      <div>
+                        <p style={styles.cardEyebrow}>Active now</p>
+                        <h4 style={styles.currentEventActiveTitle}>
+                          {activeCurrentEvent.title || "Current Event"}
+                        </h4>
+                      </div>
 
-              <div style={styles.twoCol}>
-                <div>
-                  <label style={styles.label}>City</label>
-                  <input
-                    style={styles.input}
-                    value={eventForm.city}
-                    onChange={(e) => handleEventChange("city", e.target.value)}
-                  />
-                </div>
+                      <span style={styles.currentEventActivePill}>Current Event Active</span>
+                    </div>
 
-                <div>
-                  <label style={styles.label}>State</label>
-                  <input
-                    style={styles.input}
-                    value={eventForm.state}
-                    onChange={(e) => handleEventChange("state", e.target.value)}
-                  />
-                </div>
+                    <div style={styles.inlineButtonRow}>
+                      <button
+                        type="button"
+                        style={styles.endCurrentEventButton}
+                        onClick={handleEndCurrentEvent}
+                        disabled={creatingEvent || geocoding}
+                      >
+                        {creatingEvent ? "Ending Current Event..." : "End Current Event"}
+                      </button>
+                    </div>
+
+                    <p style={styles.currentEventButtonHelperText}>
+                      Ends your current live location
+                    </p>
+
+                    <div style={styles.currentEventActiveDetails}>
+                      <p style={styles.eventLine}>
+                        Location: {activeCurrentEvent.address || activeCurrentEvent.city || "—"}
+                      </p>
+                      <p style={styles.eventLine}>
+                        Starts: {formatDisplayDateTime(activeCurrentEvent.start_time)}
+                      </p>
+                      <p style={styles.eventLine}>
+                        Ends: {formatDisplayDateTime(activeCurrentEvent.end_time)}
+                      </p>
+                      {activeCurrentEvent.note ? (
+                        <p style={styles.eventLine}>Note: {activeCurrentEvent.note}</p>
+                      ) : null}
+                    </div>
+
+                    <p style={styles.currentEventHelperText}>
+                      End this Current Event before saving another one.
+                    </p>
+                  </div>
+                ) : (
+                  <p style={styles.currentEventHelperText}>
+                    No active pop-up event yet. Fill out the sections below to create one.
+                  </p>
+                )}
+
+                {pastEvents.length > 0 ? (
+                  <div style={styles.inlineButtonRow}>
+                    <button
+                      type="button"
+                      style={styles.secondaryButton}
+                      onClick={() => setShowPastEvents((prev) => !prev)}
+                    >
+                      {showPastEvents ? "Hide past events" : "View past events"}
+                    </button>
+                  </div>
+                ) : null}
+
+                {showPastEvents && pastEvents.length > 0 ? (
+                  <div style={styles.currentEventActiveDetails}>
+                    {pastEvents.map((event) => (
+                      <div key={event.id} style={styles.selectedEventCard}>
+                        <div style={styles.selectedEventTop}>
+                          <strong>{event.title || "Untitled Event"}</strong>
+                          <span
+                            style={{
+                              ...styles.miniStatusPill,
+                              background: "#f5f5f5",
+                              color: "#666666",
+                            }}
+                          >
+                            {getEventStatus(event)}
+                          </span>
+                        </div>
+                        <p style={styles.eventLine}>Location: {event.address || event.city || "—"}</p>
+                        <p style={styles.eventLine}>Starts: {formatDisplayDateTime(event.start_time)}</p>
+                        <p style={styles.eventLine}>Ends: {formatDisplayDateTime(event.end_time)}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
               </div>
 
-              <label style={styles.label}>ZIP</label>
-              <input
-                style={styles.input}
-                value={eventForm.zip}
-                onChange={(e) => handleEventChange("zip", e.target.value)}
-                placeholder="Ex. 32953"
-              />
+              <div style={styles.eventFormSection}>
+                <h4 style={styles.subsectionTitle}>Pop-Up Event Details</h4>
+                <p style={styles.eventFormIntroText}>
+                  Add the temporary event details customers should see for this pop-up location.
+                </p>
 
-              <div style={styles.twoCol}>
-                <div>
-                  <label style={styles.label}>Latitude</label>
-                  <input
-                    style={styles.input}
-                    value={eventForm.latitude}
-                    onChange={(e) => handleEventChange("latitude", e.target.value)}
-                    placeholder="Auto-filled by geocode"
-                  />
-                </div>
-
-                <div>
-                  <label style={styles.label}>Longitude</label>
-                  <input
-                    style={styles.input}
-                    value={eventForm.longitude}
-                    onChange={(e) => handleEventChange("longitude", e.target.value)}
-                    placeholder="Auto-filled by geocode"
-                  />
-                </div>
-              </div>
-
-              <div style={styles.inlineButtonRow}>
-                <button
-                  type="button"
-                  style={styles.secondaryButton}
-                  onClick={geocodeAddress}
-                  disabled={geocoding}
-                >
-                  {geocoding ? "Geocoding..." : "Geocode Address"}
-                </button>
-              </div>
-
-              <div style={styles.twoCol}>
-                <div>
-                  <label style={styles.label}>Start time</label>
-                  <input
-                    type="datetime-local"
-                    style={styles.input}
-                    value={eventForm.start_time}
-                    onChange={(e) => handleEventChange("start_time", e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <label style={styles.label}>End time</label>
-                  <input
-                    type="datetime-local"
-                    style={styles.input}
-                    value={eventForm.end_time}
-                    onChange={(e) => handleEventChange("end_time", e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <p style={styles.ruleText}>Live events can run for a maximum of 7 days.</p>
-
-              <label style={styles.label}>Event note</label>
-              <textarea
-                style={styles.textareaSmall}
-                value={eventForm.note}
-                onChange={(e) => handleEventChange("note", e.target.value)}
-                placeholder="Anything people should know?"
-              />
-
-              <label style={styles.checkboxRow}>
+                <label style={styles.label}>Event title</label>
                 <input
-                  type="checkbox"
-                  checked={eventForm.is_active}
-                  onChange={(e) => handleEventChange("is_active", e.target.checked)}
+                  style={styles.input}
+                  value={eventForm.title}
+                  onChange={(e) => handleEventChange("title", e.target.value)}
+                  placeholder="Ex. RDNKN Booth"
                 />
-                <span>Mark event active</span>
-              </label>
 
-              <div style={styles.inlineButtonRow}>
-                <button
-                  type="button"
-                  style={styles.primaryButton}
-                  onClick={handleCreateEvent}
-                  disabled={creatingEvent || geocoding}
+                <label style={styles.label}>Type</label>
+                <select
+                  style={styles.select}
+                  value={eventForm.type}
+                  onChange={(e) => handleEventChange("type", e.target.value)}
                 >
-                  {creatingEvent ? "Creating Event..." : "Create Event"}
-                </button>
+                  {EVENT_TYPE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+
+                <label style={styles.label}>Event note</label>
+                <textarea
+                  style={styles.textareaSmall}
+                  value={eventForm.note}
+                  onChange={(e) => handleEventChange("note", e.target.value)}
+                  placeholder="Anything people should know?"
+                />
+              </div>
+
+              <div style={styles.eventFormSection}>
+                <h4 style={styles.subsectionTitle}>Pop-Up Address</h4>
+                <p style={styles.eventFormIntroText}>
+                  Enter the temporary pop-up location here. This is separate from your normal business address.
+                </p>
+
+                <label style={styles.label}>Street address</label>
+                <input
+                  style={styles.input}
+                  value={eventForm.address}
+                  onChange={(e) => handleEventChange("address", e.target.value)}
+                  placeholder="Ex. 123 Main St"
+                />
+
+                <div style={styles.threeCol}>
+                  <div>
+                    <label style={styles.label}>City</label>
+                    <input
+                      style={styles.input}
+                      value={eventForm.city}
+                      onChange={(e) => handleEventChange("city", e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={styles.label}>State</label>
+                    <input
+                      style={styles.input}
+                      value={eventForm.state}
+                      onChange={(e) => handleEventChange("state", e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={styles.label}>ZIP</label>
+                    <input
+                      style={styles.input}
+                      value={eventForm.zip}
+                      onChange={(e) => handleEventChange("zip", e.target.value)}
+                      placeholder="Ex. 32953"
+                    />
+                  </div>
+                </div>
+
+                <div style={styles.twoCol}>
+                  <div>
+                    <label style={styles.label}>Latitude</label>
+                    <input
+                      style={styles.input}
+                      value={eventForm.latitude}
+                      onChange={(e) => handleEventChange("latitude", e.target.value)}
+                      placeholder="Auto-filled by geocode"
+                    />
+                  </div>
+
+                  <div>
+                    <label style={styles.label}>Longitude</label>
+                    <input
+                      style={styles.input}
+                      value={eventForm.longitude}
+                      onChange={(e) => handleEventChange("longitude", e.target.value)}
+                      placeholder="Auto-filled by geocode"
+                    />
+                  </div>
+                </div>
+
+                <div style={styles.inlineButtonRow}>
+                  <button
+                    type="button"
+                    style={styles.secondaryButton}
+                    onClick={geocodeAddress}
+                    disabled={geocoding}
+                  >
+                    {geocoding ? "Geocoding..." : "Geocode Address"}
+                  </button>
+                </div>
+              </div>
+
+              <div style={styles.eventFormSection}>
+                <h4 style={styles.subsectionTitle}>Event Time</h4>
+                <p style={styles.eventFormIntroText}>
+                  Set when this pop-up should appear and whether it should go live immediately.
+                </p>
+
+                <div style={styles.twoCol}>
+                  <div>
+                    <label style={styles.label}>Start time</label>
+                    <input
+                      type="datetime-local"
+                      style={styles.input}
+                      value={eventForm.start_time}
+                      onChange={(e) => handleEventChange("start_time", e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={styles.label}>End time</label>
+                    <input
+                      type="datetime-local"
+                      style={styles.input}
+                      value={eventForm.end_time}
+                      onChange={(e) => handleEventChange("end_time", e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <p style={styles.ruleText}>Live events can run for a maximum of 7 days.</p>
+
+                <label style={styles.checkboxRow}>
+                  <input
+                    type="checkbox"
+                    checked={eventForm.is_active}
+                    onChange={(e) => handleEventChange("is_active", e.target.checked)}
+                  />
+                  <span>Mark event active</span>
+                </label>
+
+                <div style={styles.inlineButtonRow}>
+                  <button
+                    type="button"
+                    style={styles.primaryButton}
+                    onClick={handleCreateEvent}
+                    disabled={creatingEvent || geocoding || (activeCurrentEvents.length > 0 && eventForm.is_active)}
+                  >
+                    {creatingEvent ? "Saving Current Event..." : "Save Current Event"}
+                  </button>
+                </div>
+
+                {activeCurrentEvents.length > 0 ? (
+                  <p style={styles.currentEventHelperText}>
+                    You already have an active Current Event. End it to save a new one.
+                  </p>
+                ) : null}
               </div>
             </div>
           </div>
@@ -2584,6 +2946,21 @@ const styles = {
   displaySection: { display: "flex", flexDirection: "column" },
   sectionDivider: { height: "1px", background: "#e5e7eb", margin: "2px 0" },
   formStack: { display: "flex", flexDirection: "column", gap: "10px", marginTop: "4px" },
+  eventFormSection: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "10px",
+    padding: "14px",
+    borderRadius: "18px",
+    border: "1px solid #e5e7eb",
+    background: "#ffffff",
+  },
+  eventFormIntroText: {
+    margin: "-2px 0 2px 0",
+    fontSize: "13px",
+    color: "#64748b",
+    lineHeight: 1.6,
+  },
   liveCalloutSection: { display: "flex", flexDirection: "column", gap: "14px" },
   calloutSubsection: {
     display: "flex",
@@ -2833,11 +3210,12 @@ const styles = {
     alignItems: "center",
     padding: "7px 10px",
     borderRadius: "999px",
-    background: "#ecfdf3",
-    border: "1px solid #bbf7d0",
-    color: "#027a48",
+    background: "rgba(198, 255, 0, 0.16)",
+    border: "1px solid var(--app-happening-now-primary)",
+    color: "#111111",
     fontWeight: 800,
     fontSize: "12px",
+    boxShadow: "0 8px 18px var(--app-happening-now-glow)",
   },
   calloutSupportText: {
     margin: "10px 0 0 0",
@@ -2971,6 +3349,71 @@ const styles = {
   },
   emptyTitle: { margin: "0 0 8px 0", fontSize: "30px", fontWeight: 900 },
   subtitle: { margin: "0 0 16px 0", color: "#64748b", fontSize: "14px", lineHeight: 1.6 },
+  currentEventActiveCard: {
+    border: "1px solid #bbf7d0",
+    background: "#f0fdf4",
+    borderRadius: "18px",
+    padding: "16px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "10px",
+  },
+  currentEventLiveBanner: {
+    display: "inline-flex",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    padding: "10px 14px",
+    borderRadius: "14px",
+    background: "#dcfce7",
+    border: "1px solid #86efac",
+    color: "#166534",
+    fontSize: "13px",
+    fontWeight: 900,
+    lineHeight: 1.2,
+  },
+  currentEventActiveTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: "10px",
+    flexWrap: "wrap",
+  },
+  currentEventActiveTitle: {
+    margin: "0",
+    fontSize: "20px",
+    lineHeight: 1.15,
+    fontWeight: 900,
+    color: "#0f172a",
+  },
+  currentEventActivePill: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "8px 12px",
+    borderRadius: "999px",
+    background: "#dcfce7",
+    border: "1px solid #86efac",
+    color: "#166534",
+    fontSize: "12px",
+    fontWeight: 800,
+  },
+  currentEventActiveDetails: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+  },
+  currentEventHelperText: {
+    margin: 0,
+    color: "#64748b",
+    fontSize: "12px",
+    lineHeight: 1.5,
+  },
+  currentEventButtonHelperText: {
+    margin: "-2px 0 2px",
+    color: "#7f1d1d",
+    fontSize: "12px",
+    lineHeight: 1.5,
+    fontWeight: 600,
+  },
   primaryButton: {
     padding: "12px 18px",
     borderRadius: "999px",
@@ -2999,6 +3442,16 @@ const styles = {
     fontWeight: 900,
     cursor: "pointer",
   },
+  endCurrentEventButton: {
+    padding: "13px 18px",
+    borderRadius: "999px",
+    border: "1px solid #fdba74",
+    background: "#fff7ed",
+    color: "#9a3412",
+    fontWeight: 900,
+    cursor: "pointer",
+    boxShadow: "0 8px 16px rgba(154, 52, 18, 0.08)",
+  },
   billingCardButton: {
     width: "100%",
     padding: "12px 14px",
@@ -3024,12 +3477,12 @@ const styles = {
     padding: "14px 16px",
     borderRadius: "999px",
     border: "none",
-    background: "#111827",
-    color: "#ffffff",
+    background: "var(--app-happening-now-primary)",
+    color: "#111111",
     fontWeight: 900,
     fontSize: "14px",
     cursor: "pointer",
-    boxShadow: "0 12px 22px rgba(15,23,42,0.15)",
+    boxShadow: "none",
   },
   calloutPrimaryButtonDisabled: {
     opacity: 0.5,
@@ -3142,6 +3595,18 @@ const mobileCss = `
     .sellerdash-bottom-card .dayEventChip,
     .sellerdash-bottom-card .moreEventsChip {
       font-size: 9px !important;
+    }
+
+    .sellerdash-live-callout-card {
+      position: relative;
+      z-index: 2;
+    }
+
+    .sellerdash-callout-button {
+      touch-action: manipulation;
+      position: sticky;
+      bottom: calc(var(--safe-bottom) + var(--mobile-bottom-nav-height, 88px) + 8px);
+      z-index: 3;
     }
 
     .sellerdash-page * {

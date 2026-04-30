@@ -37,7 +37,55 @@ const BUSINESS_TYPE_OPTIONS = [
 
 const CONTACT_METHOD_OPTIONS = ["Email", "Phone", "Instagram", "Facebook"];
 
+const OPENCAGE_API_KEY = process.env.REACT_APP_OPENCAGE_API_KEY || "";
 const ADMIN_NOTIFY_API_URL = "http://localhost:4242/api/admin/new-submission-notify";
+
+async function geocodeRawAddress(addressParts) {
+  const query = addressParts.filter(Boolean).join(", ").trim();
+
+  if (!query) {
+    return { latitude: null, longitude: null, error: "Add an address first." };
+  }
+
+  if (!OPENCAGE_API_KEY) {
+    return {
+      latitude: null,
+      longitude: null,
+      error: "OpenCage key not found in environment.",
+    };
+  }
+
+  try {
+    const url = `https://api.opencagedata.com/geocode/v1/json?q=${encodeURIComponent(
+      query
+    )}&key=${encodeURIComponent(OPENCAGE_API_KEY)}&limit=1&no_annotations=1`;
+
+    const response = await fetch(url);
+    const json = await response.json();
+    const result = json?.results?.[0];
+
+    if (!result?.geometry) {
+      return {
+        latitude: null,
+        longitude: null,
+        error: "Could not geocode that address.",
+      };
+    }
+
+    return {
+      latitude: Number(result.geometry.lat),
+      longitude: Number(result.geometry.lng),
+      error: null,
+    };
+  } catch (err) {
+    console.error("geocodeRawAddress error:", err);
+    return {
+      latitude: null,
+      longitude: null,
+      error: "Geocoding failed.",
+    };
+  }
+}
 
 export default function ListYourBusiness() {
   const navigate = useNavigate();
@@ -188,6 +236,7 @@ export default function ListYourBusiness() {
     setLoading(true);
 
     try {
+      let geocodeWarning = "";
       let imageUrl = "";
 
       if (image) {
@@ -201,6 +250,31 @@ export default function ListYourBusiness() {
       if (!user) {
         alert("You must be logged in");
         return;
+      }
+
+      let latitude = null;
+      let longitude = null;
+
+      const addressParts = [
+        form.address.trim(),
+        form.city.trim(),
+        form.state.trim(),
+        form.zip.trim(),
+      ].filter(Boolean);
+
+      if (addressParts.length > 0) {
+        const geo = await geocodeRawAddress(addressParts);
+
+        if (!geo.error && geo.latitude != null && geo.longitude != null) {
+          latitude = geo.latitude;
+          longitude = geo.longitude;
+        } else {
+          geocodeWarning = geo.error || "Address geocoding did not return coordinates.";
+          console.warn("Business application geocode warning:", {
+            warning: geocodeWarning,
+            addressParts,
+          });
+        }
       }
 
       const payload = {
@@ -225,6 +299,8 @@ export default function ListYourBusiness() {
         state: form.state.trim(),
         zip: form.zip.trim(),
         location: form.location.trim(),
+        latitude,
+        longitude,
         admin_notes: form.admin_notes.trim(),
         image_url: imageUrl,
         user_id: user.id,
@@ -259,7 +335,11 @@ export default function ListYourBusiness() {
         console.error("ADMIN NOTIFY ERROR:", notifyErr);
       }
 
-      setMessage("Business submitted! Redirecting...");
+      setMessage(
+        geocodeWarning
+          ? `Business submitted! Address geocoding needs review: ${geocodeWarning}`
+          : "Business submitted! Redirecting..."
+      );
       setTimeout(() => navigate("/application-pending"), 1000);
     } catch (err) {
       console.error("SUBMIT ERROR:", err);
